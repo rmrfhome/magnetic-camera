@@ -22,7 +22,6 @@ import com.example.magneticcamera.core.storage.AppFileStore
 import com.example.magneticcamera.core.storage.ScanDraftStore
 import com.example.magneticcamera.data.repository.ScanSessionRepository
 import com.example.magneticcamera.domain.calibration.BaselineCalibrator
-import com.example.magneticcamera.domain.model.NormalizedPoint
 import com.example.magneticcamera.domain.model.PhotoOverlayArea
 import com.example.magneticcamera.domain.scan.CaptureMode
 import com.example.magneticcamera.domain.scan.GridScanController
@@ -352,14 +351,14 @@ class ScanWorkflowViewModel(
     }
 
     fun beginScan(): Boolean {
-        val state = _uiState.value
-        if (state.baseline == null) {
-            _uiState.value = state.copy(errorMessage = "Set a baseline before scanning.")
+        if (_uiState.value.baseline == null) {
+            _uiState.value = _uiState.value.copy(errorMessage = "Set a baseline before scanning.")
             return false
         }
         startSensor()
+        val state = _uiState.value
         if (sensorReader.sensorInfo.value?.isAvailable == false) {
-            _uiState.value = _uiState.value.copy(errorMessage = noMagnetometerMessage())
+            _uiState.value = state.copy(errorMessage = noMagnetometerMessage())
             return false
         }
         _uiState.value = state.copy(
@@ -417,21 +416,24 @@ class ScanWorkflowViewModel(
             _uiState.value = state.copy(errorMessage = "Set a baseline before capturing cells.")
             return
         }
+        val sessionId = state.currentSessionId
+        val row = state.currentRow
+        val col = state.currentCol
+        _uiState.value = state.copy(isCapturing = true, errorMessage = null)
         viewModelScope.launch {
             startSensor()
             if (sensorReader.sensorInfo.value?.isAvailable == false) {
-                _uiState.value = _uiState.value.copy(
-                    isCapturing = false,
-                    errorMessage = noMagnetometerMessage()
-                )
+                if (_uiState.value.currentSessionId == sessionId) {
+                    _uiState.value = _uiState.value.copy(
+                        isCapturing = false,
+                        errorMessage = noMagnetometerMessage()
+                    )
+                }
                 return@launch
             }
             val startMillis = SystemClock.elapsedRealtime()
-            val row = _uiState.value.currentRow
-            val col = _uiState.value.currentCol
             val samples = mutableListOf<MagneticSample>()
             captureProcessor.reset()
-            _uiState.value = _uiState.value.copy(isCapturing = true, errorMessage = null)
             withTimeoutOrNull(2_100L) {
                 while (true) {
                     val raw = sensorReader.samples.first()
@@ -443,22 +445,26 @@ class ScanWorkflowViewModel(
                 }
             }
             val measurement = gridController.captureCell(
-                sessionId = _uiState.value.currentSessionId,
+                sessionId = sessionId,
                 row = row,
                 col = col,
                 samples = samples
             )
+            val latest = _uiState.value
+            if (latest.currentSessionId != sessionId || !latest.isScanStarted) {
+                return@launch
+            }
             if (measurement.sampleCount <= 0) {
-                _uiState.value = _uiState.value.copy(
+                _uiState.value = latest.copy(
                     isCapturing = false,
                     errorMessage = "No usable magnetic samples were captured. Keep the scan screen open and try this cell again."
                 )
                 return@launch
             }
-            _uiState.value = _uiState.value.copy(
+            _uiState.value = latest.copy(
                 isCapturing = false,
-                cells = _uiState.value.cells + measurement,
-                message = "Cell ${_uiState.value.cells.size + 1} captured with ${measurement.sampleCount} samples."
+                cells = latest.cells + measurement,
+                message = "Cell ${latest.cells.size + 1} captured with ${measurement.sampleCount} samples."
             )
             persistDraftIfStarted()
             finishIfComplete()

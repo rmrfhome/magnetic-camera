@@ -74,3 +74,4 @@ Magnetic Camera is not an X-ray, wall-wire detector, safety instrument, medical 
 - Debug APK: `app/build/outputs/apk/debug/app-debug.apk`
 - APK permissions: camera and high-sampling-rate sensors, plus AndroidX internal receiver permission
 - Camera and compass are declared as optional hardware features
+- App files, Room databases, and SharedPreferences are excluded from backup and device transfer

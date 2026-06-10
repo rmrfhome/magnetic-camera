@@ -14,6 +14,8 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Camera
+import androidx.compose.material.icons.filled.ExpandLess
+import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.FiberManualRecord
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.Save
@@ -24,6 +26,11 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -49,6 +56,7 @@ fun LiveMeterScreen(
     onStartScan: () -> Unit
 ) {
     SensorLifecycleEffect(onStart = onStart, onStop = onStop)
+    var diagnosticsExpanded by rememberSaveable { mutableStateOf(false) }
 
     Column(
         modifier = Modifier
@@ -152,38 +160,56 @@ fun LiveMeterScreen(
             }
         }
 
-        InstrumentPanel(title = "Sensor Diagnostics") {
-            StatusText("Name", state.sensorInfo?.name ?: "Unavailable")
-            StatusText("Vendor", state.sensorInfo?.vendor ?: "--")
-            StatusText("Type", state.sensorInfo?.typeLabel ?: "--")
-            StatusText("Resolution", "${state.sensorInfo?.resolution?.format(3) ?: "--"} µT")
-            StatusText("Range", "${state.sensorInfo?.maximumRange?.format(1) ?: "--"} µT")
-            StatusText("Minimum delay", "${state.sensorInfo?.minimumDelayMicros ?: 0} us")
-            val latestSample = state.latestSample
-            if (latestSample?.biasXMicroTesla != null ||
-                latestSample?.biasYMicroTesla != null ||
-                latestSample?.biasZMicroTesla != null
+        InstrumentPanel(title = "Advanced") {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                StatusText("Hard-iron bias", "Uncalibrated sensor estimate")
-                Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                    MetricReadout(
-                        "Bias X",
-                        latestSample.biasXMicroTesla?.format(1) ?: "--",
-                        "µT",
-                        Modifier.weight(1f)
+                Column(modifier = Modifier.weight(1f)) {
+                    Text("Sensor Diagnostics", fontWeight = FontWeight.SemiBold)
+                    Text("Sensor hardware details", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+                IconButton(onClick = { diagnosticsExpanded = !diagnosticsExpanded }) {
+                    Icon(
+                        if (diagnosticsExpanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                        contentDescription = if (diagnosticsExpanded) "Collapse diagnostics" else "Expand diagnostics"
                     )
-                    MetricReadout(
-                        "Bias Y",
-                        latestSample.biasYMicroTesla?.format(1) ?: "--",
-                        "µT",
-                        Modifier.weight(1f)
-                    )
-                    MetricReadout(
-                        "Bias Z",
-                        latestSample.biasZMicroTesla?.format(1) ?: "--",
-                        "µT",
-                        Modifier.weight(1f)
-                    )
+                }
+            }
+            if (diagnosticsExpanded) {
+                StatusText("Name", state.sensorInfo?.name ?: "Unavailable")
+                StatusText("Vendor", state.sensorInfo?.vendor ?: "--")
+                StatusText("Type", state.sensorInfo?.typeLabel ?: "--")
+                StatusText("Resolution", "${state.sensorInfo?.resolution?.format(3) ?: "--"} µT")
+                StatusText("Range", "${state.sensorInfo?.maximumRange?.format(1) ?: "--"} µT")
+                StatusText("Minimum delay", "${state.sensorInfo?.minimumDelayMicros ?: 0} us")
+                val latestSample = state.latestSample
+                if (latestSample?.biasXMicroTesla != null ||
+                    latestSample?.biasYMicroTesla != null ||
+                    latestSample?.biasZMicroTesla != null
+                ) {
+                    StatusText("Hard-iron bias", "Uncalibrated sensor estimate")
+                    Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                        MetricReadout(
+                            "Bias X",
+                            latestSample.biasXMicroTesla?.format(1) ?: "--",
+                            "µT",
+                            Modifier.weight(1f)
+                        )
+                        MetricReadout(
+                            "Bias Y",
+                            latestSample.biasYMicroTesla?.format(1) ?: "--",
+                            "µT",
+                            Modifier.weight(1f)
+                        )
+                        MetricReadout(
+                            "Bias Z",
+                            latestSample.biasZMicroTesla?.format(1) ?: "--",
+                            "µT",
+                            Modifier.weight(1f)
+                        )
+                    }
                 }
             }
         }

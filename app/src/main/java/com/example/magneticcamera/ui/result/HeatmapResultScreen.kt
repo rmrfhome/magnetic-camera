@@ -59,7 +59,7 @@ fun HeatmapResultScreen(
     onGallery: () -> Unit
 ) {
     val heatmap = state.heatmap
-    val photo = rememberBitmap(state.photoUri)
+    val photo = rememberBitmap(state.photoUri.takeIf { state.setup.shouldTakePhoto })
     val controlsEnabled = !state.isSaving
     val values = state.cells.mapNotNull { cell ->
         cell.valueForHeatmap(state.normalizationMode).takeIf { it.isFinite() }

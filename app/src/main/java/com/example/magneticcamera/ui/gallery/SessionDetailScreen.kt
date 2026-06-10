@@ -79,28 +79,27 @@ fun SessionDetailScreen(
             Text("Loading session...", color = MaterialTheme.colorScheme.onSurfaceVariant)
         } else {
             val session = sessionWithCells.session
-            val image = rememberBitmap(session.overlayImageUri ?: session.heatmapImageUri ?: session.photoUri)
+            val resultImage = rememberBitmap(session.overlayImageUri ?: session.heatmapImageUri)
+            val referencePhoto = rememberBitmap(session.photoUri)
 
             LazyColumn(
                 modifier = Modifier.weight(1f),
                 verticalArrangement = Arrangement.spacedBy(14.dp)
             ) {
                 item {
-                    InstrumentPanel(title = "Image") {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .aspectRatio(1f)
-                        ) {
-                            if (image != null) {
-                                Image(
-                                    bitmap = image.asImageBitmap(),
-                                    contentDescription = "Saved scan image",
-                                    contentScale = ContentScale.FillBounds,
-                                    modifier = Modifier.matchParentSize()
-                                )
-                            }
-                        }
+                    SessionImagePanel(
+                        title = "Saved Result",
+                        image = resultImage,
+                        contentDescription = "Saved scan result image"
+                    )
+                }
+                if (session.photoUri != null) {
+                    item {
+                        SessionImagePanel(
+                            title = "Reference Photo",
+                            image = referencePhoto,
+                            contentDescription = "Reference photo"
+                        )
                     }
                 }
                 item {
@@ -205,6 +204,32 @@ fun SessionDetailScreen(
                             .horizontalScroll(rememberScrollState())
                     )
                 }
+            }
+        }
+    }
+}
+
+@Composable
+private fun SessionImagePanel(
+    title: String,
+    image: android.graphics.Bitmap?,
+    contentDescription: String
+) {
+    InstrumentPanel(title = title) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .aspectRatio(4f / 3f)
+        ) {
+            if (image != null) {
+                Image(
+                    bitmap = image.asImageBitmap(),
+                    contentDescription = contentDescription,
+                    contentScale = ContentScale.Fit,
+                    modifier = Modifier.matchParentSize()
+                )
+            } else {
+                Text("No image file is available.", color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }
     }

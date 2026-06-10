@@ -14,6 +14,7 @@ This checklist separates checks that can run on the workstation from checks that
 - [x] Compass/magnetometer hardware is optional, so the app can open on devices without a magnetometer and show an explicit explanation.
 - [x] No location, contacts, microphone, network, account, or background permissions are declared.
 - [x] App data backup is disabled in the manifest, keeping saved scans local unless the user explicitly shares exports.
+- [x] Backup and device-transfer rules exclude app files, Room databases, and SharedPreferences.
 
 ## Pixel 8 Device Prep
 
@@ -50,7 +51,7 @@ This checklist separates checks that can run on the workstation from checks that
 - [ ] Heatmap-only PNG is saved.
 - [ ] Photo-overlay PNG is saved when a reference photo exists.
 - [ ] Saved session appears in Gallery after closing and reopening the app.
-- [ ] Session Detail shows metadata, image preview, raw grid values, and export buttons.
+- [ ] Session Detail shows metadata, saved result image, reference photo when present, raw grid values, and export buttons.
 - [ ] JSON export contains every captured cell with mean, median, min, max, standard deviation, delta, timestamp, sample count, and accuracy fields.
 - [ ] CSV export contains every captured cell with the same full cell statistics.
 - [ ] Exported PNG/JSON/CSV files can be shared through Android's share sheet.
