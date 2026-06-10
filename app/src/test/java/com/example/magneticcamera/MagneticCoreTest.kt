@@ -30,6 +30,7 @@ import com.example.magneticcamera.domain.scan.NormalizationMode
 import com.example.magneticcamera.domain.scan.ScanDraft
 import com.example.magneticcamera.domain.scan.ScanSession
 import com.example.magneticcamera.domain.scan.ScanSetup
+import com.example.magneticcamera.ui.scan.ScanUiState
 import kotlin.math.sqrt
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
@@ -652,6 +653,20 @@ class MagneticCoreTest {
             ),
             0.0001f
         )
+    }
+
+    @Test
+    fun scanUiStateOnlyExposesUnsavedScansForHomeResume() {
+        val completeUnsaved = ScanUiState(
+            setup = ScanSetup(gridWidth = 1, gridHeight = 1),
+            currentSessionId = "scan-1",
+            isScanStarted = true,
+            cells = listOf(cell("scan-1"))
+        )
+
+        assertTrue(completeUnsaved.isComplete)
+        assertTrue(completeUnsaved.hasUnsavedScan)
+        assertFalse(completeUnsaved.copy(savedSessionId = "scan-1").hasUnsavedScan)
     }
 
     private fun sample(

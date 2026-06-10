@@ -60,6 +60,7 @@ fun HeatmapResultScreen(
 ) {
     val heatmap = state.heatmap
     val photo = rememberBitmap(state.photoUri)
+    val controlsEnabled = !state.isSaving
     val values = state.cells.mapNotNull { cell ->
         cell.valueForHeatmap(state.normalizationMode).takeIf { it.isFinite() }
     }
@@ -155,14 +156,14 @@ fun HeatmapResultScreen(
 
             InstrumentPanel(title = "Overlay Controls") {
                 Text("Opacity ${(state.opacity * 100).toInt()}%", color = MaterialTheme.colorScheme.onSurfaceVariant)
-                Slider(value = state.opacity, onValueChange = onOpacityChange)
+                Slider(value = state.opacity, enabled = controlsEnabled, onValueChange = onOpacityChange)
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                     Text("Show grid")
-                    Switch(checked = state.showGrid, onCheckedChange = onShowGridChange)
+                    Switch(checked = state.showGrid, enabled = controlsEnabled, onCheckedChange = onShowGridChange)
                 }
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                     Text("Show legend")
-                    Switch(checked = state.showLegend, onCheckedChange = onShowLegendChange)
+                    Switch(checked = state.showLegend, enabled = controlsEnabled, onCheckedChange = onShowLegendChange)
                 }
             }
 
@@ -170,11 +171,13 @@ fun HeatmapResultScreen(
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     FilterChip(
                         selected = state.paletteMode == PaletteMode.Scientific,
+                        enabled = controlsEnabled,
                         onClick = { onPaletteChange(PaletteMode.Scientific) },
                         label = { Text("Scientific") }
                     )
                     FilterChip(
                         selected = state.paletteMode == PaletteMode.MonochromeGlow,
+                        enabled = controlsEnabled,
                         onClick = { onPaletteChange(PaletteMode.MonochromeGlow) },
                         label = { Text("Glow") }
                     )
@@ -185,16 +188,19 @@ fun HeatmapResultScreen(
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     FilterChip(
                         selected = state.normalizationMode == NormalizationMode.AutoLocal,
+                        enabled = controlsEnabled,
                         onClick = { onNormalizationChange(NormalizationMode.AutoLocal) },
                         label = { Text("Auto") }
                     )
                     FilterChip(
                         selected = state.normalizationMode == NormalizationMode.BaselineDeltaFixedScale(10f),
+                        enabled = controlsEnabled,
                         onClick = { onNormalizationChange(NormalizationMode.BaselineDeltaFixedScale(10f)) },
                         label = { Text("10 µT") }
                     )
                     FilterChip(
                         selected = state.normalizationMode == NormalizationMode.BaselineDeltaFixedScale(50f),
+                        enabled = controlsEnabled,
                         onClick = { onNormalizationChange(NormalizationMode.BaselineDeltaFixedScale(50f)) },
                         label = { Text("50 µT") }
                     )
@@ -202,16 +208,19 @@ fun HeatmapResultScreen(
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     FilterChip(
                         selected = state.normalizationMode == NormalizationMode.BaselineDeltaFixedScale(100f),
+                        enabled = controlsEnabled,
                         onClick = { onNormalizationChange(NormalizationMode.BaselineDeltaFixedScale(100f)) },
                         label = { Text("100 µT") }
                     )
                     FilterChip(
                         selected = state.normalizationMode == NormalizationMode.BaselineDeltaFixedScale(500f),
+                        enabled = controlsEnabled,
                         onClick = { onNormalizationChange(NormalizationMode.BaselineDeltaFixedScale(500f)) },
                         label = { Text("500 µT") }
                     )
                     FilterChip(
                         selected = state.normalizationMode == NormalizationMode.AbsoluteField,
+                        enabled = controlsEnabled,
                         onClick = { onNormalizationChange(NormalizationMode.AbsoluteField) },
                         label = { Text("Absolute") }
                     )
@@ -219,9 +228,13 @@ fun HeatmapResultScreen(
             }
 
             InstrumentPanel(title = "Save and Export") {
-                Button(modifier = Modifier.fillMaxWidth(), onClick = onSave) {
+                Button(
+                    modifier = Modifier.fillMaxWidth(),
+                    enabled = !state.isSaving,
+                    onClick = onSave
+                ) {
                     Icon(Icons.Default.Save, contentDescription = null)
-                    Text("Save PNG, JSON, and CSV")
+                    Text(if (state.isSaving) "Saving..." else "Save PNG, JSON, and CSV")
                 }
                 Button(modifier = Modifier.fillMaxWidth(), onClick = onGallery) {
                     Icon(Icons.Default.PhotoLibrary, contentDescription = null)

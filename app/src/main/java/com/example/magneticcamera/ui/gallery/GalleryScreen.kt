@@ -26,6 +26,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.example.magneticcamera.core.sensors.magneticSensorTypeLabel
 import com.example.magneticcamera.data.db.ScanSessionEntity
@@ -124,11 +125,36 @@ private fun SessionCard(
                 modifier = Modifier.weight(0.64f),
                 verticalArrangement = Arrangement.spacedBy(4.dp)
             ) {
-                Text(session.name, fontWeight = FontWeight.Bold)
-                Text(formatDate(session.createdAtMillis), color = MaterialTheme.colorScheme.onSurfaceVariant)
-                Text("${session.gridWidth}x${session.gridHeight} grid", color = MaterialTheme.colorScheme.onSurfaceVariant)
-                Text("Max delta ${"%.2f".format(session.maxVectorDelta)} µT", color = MaterialTheme.colorScheme.onSurfaceVariant)
-                Text("Sensor ${magneticSensorTypeLabel(session.sensorType)}", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text(
+                    text = session.name,
+                    fontWeight = FontWeight.Bold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Text(
+                    text = formatDate(session.createdAtMillis),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Text(
+                    text = "${session.gridWidth}x${session.gridHeight} grid",
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Text(
+                    text = "Max delta ${"%.2f".format(session.maxVectorDelta)} µT",
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Text(
+                    text = "Sensor ${magneticSensorTypeLabel(session.sensorType)}",
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
             }
         }
     }

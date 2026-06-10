@@ -108,7 +108,7 @@ fun ScanSetupScreen(
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 listOf(5, 7, 10).forEach { size ->
                     FilterChip(
-                        selected = state.setup.gridWidth == size,
+                        selected = state.setup.gridWidth == size && state.setup.gridHeight == size,
                         onClick = { onGridSizeChange(size) },
                         label = { Text("${size}x$size") }
                     )

@@ -36,6 +36,7 @@ import com.example.magneticcamera.domain.scan.ScanSetup
 import java.io.File
 import java.util.ArrayDeque
 import java.util.UUID
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -172,25 +173,46 @@ class ScanWorkflowViewModel(
     }
 
     fun updatePalette(paletteMode: PaletteMode) {
-        _uiState.value = _uiState.value.copy(paletteMode = paletteMode)
+        val state = _uiState.value
+        if (state.isSaving) return
+        if (state.paletteMode == paletteMode) return
+        _uiState.value = state.copy(paletteMode = paletteMode, savedSessionId = null)
+        persistDraftIfStarted()
         regenerateHeatmapIfComplete()
     }
 
     fun updateNormalization(normalizationMode: NormalizationMode) {
-        _uiState.value = _uiState.value.copy(normalizationMode = normalizationMode)
+        val state = _uiState.value
+        if (state.isSaving) return
+        if (state.normalizationMode == normalizationMode) return
+        _uiState.value = state.copy(normalizationMode = normalizationMode, savedSessionId = null)
+        persistDraftIfStarted()
         regenerateHeatmapIfComplete()
     }
 
     fun updateOpacity(opacity: Float) {
-        _uiState.value = _uiState.value.copy(opacity = opacity.coerceIn(0f, 1f))
+        val state = _uiState.value
+        if (state.isSaving) return
+        val sanitized = opacity.coerceIn(0f, 1f)
+        if (state.opacity == sanitized) return
+        _uiState.value = state.copy(opacity = sanitized, savedSessionId = null)
+        persistDraftIfStarted()
     }
 
     fun updateShowGrid(showGrid: Boolean) {
-        _uiState.value = _uiState.value.copy(showGrid = showGrid)
+        val state = _uiState.value
+        if (state.isSaving) return
+        if (state.showGrid == showGrid) return
+        _uiState.value = state.copy(showGrid = showGrid, savedSessionId = null)
+        persistDraftIfStarted()
     }
 
     fun updateShowLegend(showLegend: Boolean) {
-        _uiState.value = _uiState.value.copy(showLegend = showLegend)
+        val state = _uiState.value
+        if (state.isSaving) return
+        if (state.showLegend == showLegend) return
+        _uiState.value = state.copy(showLegend = showLegend, savedSessionId = null)
+        persistDraftIfStarted()
     }
 
     fun updateOverlayArea(area: PhotoOverlayArea) {
@@ -233,6 +255,7 @@ class ScanWorkflowViewModel(
                     persistDraftIfStarted()
                 }
                 .onFailure { error ->
+                    error.rethrowIfCancellation()
                     _uiState.value = _uiState.value.copy(
                         errorMessage = error.message ?: "Could not import the selected photo."
                     )
@@ -400,40 +423,61 @@ class ScanWorkflowViewModel(
         val state = _uiState.value
         val heatmap = state.heatmap
         val baseline = state.baseline
+        if (state.isSaving) return
         if (heatmap == null || baseline == null || !state.isComplete) {
             _uiState.value = state.copy(errorMessage = "Complete a scan before saving.")
             return
         }
         viewModelScope.launch {
-            val photoUri = state.photoUri.takeIf { state.setup.shouldTakePhoto }
-            val (exportHeatmap, overlayBitmap) = withContext(Dispatchers.Default) {
-                val render = buildHeatmap(state, 2048, 2048)
-                render to buildOverlayBitmap(state, render)
+            _uiState.value = state.copy(
+                isSaving = true,
+                message = "Saving scan and exports...",
+                errorMessage = null
+            )
+            val result = runCatching {
+                val photoUri = state.photoUri.takeIf { state.setup.shouldTakePhoto }
+                val (exportHeatmap, overlayBitmap) = withContext(Dispatchers.Default) {
+                    val render = buildHeatmap(state, 2048, 2048)
+                    render to buildOverlayBitmap(state, render)
+                }
+                val session = ScanSession(
+                    id = state.currentSessionId,
+                    name = state.setup.name.ifBlank { "Surface scan" },
+                    createdAtMillis = System.currentTimeMillis(),
+                    gridWidth = state.setup.gridWidth,
+                    gridHeight = state.setup.gridHeight,
+                    baseline = baseline,
+                    photoUri = photoUri,
+                    overlayArea = state.overlayArea,
+                    cells = state.cells
+                )
+                repository.saveSession(
+                    session = session,
+                    sensorInfo = sensorReader.sensorInfo.value,
+                    heatmapRender = exportHeatmap,
+                    overlayBitmap = overlayBitmap,
+                    includeGrid = state.showGrid,
+                    includeLegend = state.showLegend
+                )
             }
-            val session = ScanSession(
-                id = state.currentSessionId,
-                name = state.setup.name.ifBlank { "Surface scan" },
-                createdAtMillis = System.currentTimeMillis(),
-                gridWidth = state.setup.gridWidth,
-                gridHeight = state.setup.gridHeight,
-                baseline = baseline,
-                photoUri = photoUri,
-                overlayArea = state.overlayArea,
-                cells = state.cells
-            )
-            val savedId = repository.saveSession(
-                session = session,
-                sensorInfo = sensorReader.sensorInfo.value,
-                heatmapRender = exportHeatmap,
-                overlayBitmap = overlayBitmap,
-                includeGrid = state.showGrid,
-                includeLegend = state.showLegend
-            )
-            _uiState.value = _uiState.value.copy(
-                savedSessionId = savedId,
-                message = "Saved scan and exported PNG, JSON, and CSV."
-            )
-            draftStore.clear()
+            result
+                .onSuccess { savedId ->
+                    _uiState.value = _uiState.value.copy(
+                        isSaving = false,
+                        savedSessionId = savedId,
+                        message = "Saved scan and exported PNG, JSON, and CSV.",
+                        errorMessage = null
+                    )
+                    draftStore.clear()
+                }
+                .onFailure { error ->
+                    error.rethrowIfCancellation()
+                    _uiState.value = _uiState.value.copy(
+                        isSaving = false,
+                        message = null,
+                        errorMessage = error.message ?: "Could not save scan exports."
+                    )
+                }
         }
     }
 
@@ -454,6 +498,19 @@ class ScanWorkflowViewModel(
             stopSensor()
             startSensor()
         }
+    }
+
+    fun prepareNewScan() {
+        val state = _uiState.value
+        if (state.hasUnsavedScan) return
+        _uiState.value = ScanUiState(
+            currentSessionId = UUID.randomUUID().toString(),
+            baseline = state.baseline
+        )
+        processor.reset()
+        captureProcessor.reset()
+        recentProcessed.clear()
+        draftStore.clear()
     }
 
     override fun onCleared() {
@@ -645,6 +702,10 @@ class ScanWorkflowViewModel(
                 if (input == null) null else BitmapFactory.decodeStream(input)
             }
         }.getOrNull()
+    }
+
+    private fun Throwable.rethrowIfCancellation() {
+        if (this is CancellationException) throw this
     }
 
     private companion object {

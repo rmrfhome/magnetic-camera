@@ -19,6 +19,7 @@ data class ScanUiState(
     val isScanStarted: Boolean = false,
     val isCalibrating: Boolean = false,
     val isCapturing: Boolean = false,
+    val isSaving: Boolean = false,
     val latestSample: MagneticSample? = null,
     val stabilityStdDev: Float = 0f,
     val isStable: Boolean = false,
@@ -37,6 +38,7 @@ data class ScanUiState(
     val currentCellIndex: Int get() = cells.size.coerceAtMost(totalCells)
     val progress: Float get() = if (totalCells == 0) 0f else cells.size.toFloat() / totalCells
     val isComplete: Boolean get() = totalCells > 0 && cells.size >= totalCells
+    val hasUnsavedScan: Boolean get() = isScanStarted && savedSessionId == null
     val currentRow: Int get() = currentCellIndex / setup.gridWidth
     val currentCol: Int get() = currentCellIndex % setup.gridWidth
 }

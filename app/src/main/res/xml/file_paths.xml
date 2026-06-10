@@ -1,6 +1,15 @@
 <?xml version="1.0" encoding="utf-8"?>
 <paths xmlns:android="http://schemas.android.com/apk/res/android">
     <files-path
-        name="magnetic_camera_files"
-        path="." />
+        name="heatmaps"
+        path="heatmaps/" />
+    <files-path
+        name="overlays"
+        path="overlays/" />
+    <files-path
+        name="raw"
+        path="raw/" />
+    <files-path
+        name="exports"
+        path="exports/" />
 </paths>

@@ -82,6 +82,24 @@ fun AppNavHost(container: AppContainer) {
     val cameraAvailable = remember {
         context.packageManager.hasSystemFeature(PackageManager.FEATURE_CAMERA_ANY)
     }
+    val unsavedScanDestination = if (scanState.isComplete) Routes.Result else Routes.ScanCapture
+    val openScanEntryPoint = {
+        if (scanState.hasUnsavedScan) {
+            navController.navigate(unsavedScanDestination)
+        } else {
+            scanViewModel.prepareNewScan()
+            navController.navigate(Routes.ScanSetup)
+        }
+    }
+    val openScanFromLiveMeter = {
+        if (scanState.hasUnsavedScan) {
+            navController.navigate(unsavedScanDestination)
+        } else {
+            scanViewModel.prepareNewScan()
+            scanViewModel.adoptBaseline(liveState.baseline)
+            navController.navigate(Routes.ScanSetup)
+        }
+    }
 
     NavHost(navController = navController, startDestination = Routes.Home) {
         composable(Routes.Home) {
@@ -94,17 +112,17 @@ fun AppNavHost(container: AppContainer) {
                     container.firstLaunchStore.markExplanationSeen()
                 },
                 onLiveMeter = { navController.navigate(Routes.Live) },
-                onNewScan = { navController.navigate(Routes.ScanSetup) },
+                onNewScan = openScanEntryPoint,
                 onGallery = { navController.navigate(Routes.Gallery) },
                 onSettings = { navController.navigate(Routes.Settings) },
-                partialScanLabel = scanState.takeIf { it.isScanStarted }?.let {
+                partialScanLabel = scanState.takeIf { it.hasUnsavedScan }?.let {
                     if (it.isComplete) {
                         "Scan complete with ${it.cells.count { cell -> cell.sampleCount > 0 }} of ${it.totalCells} sampled cells. Save or export the result."
                     } else {
                         "${it.cells.size} of ${it.totalCells} cells captured"
                     }
                 },
-                partialScanActionLabel = if (scanState.isComplete) "View Result" else "Resume",
+                partialScanActionLabel = if (scanState.hasUnsavedScan && scanState.isComplete) "View Result" else "Resume",
                 onResumeScan = {
                     navController.navigate(if (scanState.isComplete) Routes.Result else Routes.ScanCapture)
                 },
@@ -121,10 +139,7 @@ fun AppNavHost(container: AppContainer) {
                 onSetBaseline = liveViewModel::setBaseline,
                 onFreeze = liveViewModel::toggleFreeze,
                 onSaveSnapshot = liveViewModel::saveSnapshot,
-                onStartScan = {
-                    scanViewModel.adoptBaseline(liveState.baseline)
-                    navController.navigate(Routes.ScanSetup)
-                }
+                onStartScan = openScanFromLiveMeter
             )
         }
 
@@ -203,7 +218,7 @@ fun AppNavHost(container: AppContainer) {
             GalleryScreen(
                 sessions = sessions,
                 onBack = { navController.popBackStack() },
-                onNewScan = { navController.navigate(Routes.ScanSetup) },
+                onNewScan = openScanEntryPoint,
                 onOpenSession = { id -> navController.navigate("session/$id") }
             )
         }
