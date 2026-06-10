@@ -33,6 +33,7 @@ class ScanSessionRepositoryImpl(
         sensorInfo: MagneticSensorInfo?,
         heatmapRender: HeatmapRender,
         overlayBitmap: Bitmap?,
+        includeGrid: Boolean,
         includeLegend: Boolean
     ): String = withContext(Dispatchers.IO) {
         val heatmapFile = fileStore.heatmapFile(session.id)
@@ -40,7 +41,14 @@ class ScanSessionRepositoryImpl(
         val csvFile = fileStore.csvExportFile(session.id)
         val overlayFile = overlayBitmap?.let { fileStore.overlayFile(session.id) }
 
-        pngExporter.saveHeatmap(heatmapRender, heatmapFile, includeLegend)
+        pngExporter.saveHeatmap(
+            render = heatmapRender,
+            file = heatmapFile,
+            includeLegend = includeLegend,
+            includeGrid = includeGrid,
+            gridWidth = session.gridWidth,
+            gridHeight = session.gridHeight
+        )
         if (overlayBitmap != null && overlayFile != null) {
             pngExporter.saveBitmap(overlayBitmap, overlayFile, heatmapRender.legend.takeIf { includeLegend })
         }
@@ -56,8 +64,8 @@ class ScanSessionRepositoryImpl(
         )
         fileStore.writeText(csvFile, csvExporter.export(session))
 
-        dao.insertSession(
-            ScanSessionEntity(
+        dao.replaceSessionWithCells(
+            session = ScanSessionEntity(
                 id = session.id,
                 name = session.name,
                 createdAtMillis = session.createdAtMillis,
@@ -88,10 +96,8 @@ class ScanSessionRepositoryImpl(
                 rawDataUri = fileStore.uriString(rawJsonFile),
                 csvDataUri = fileStore.uriString(csvFile),
                 notes = session.notes
-            )
-        )
-        dao.insertCells(
-            session.cells.map { cell ->
+            ),
+            cells = session.cells.map { cell ->
                 GridCellMeasurementEntity(
                     id = cell.id,
                     sessionId = session.id,

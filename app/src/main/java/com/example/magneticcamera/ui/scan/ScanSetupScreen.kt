@@ -52,6 +52,7 @@ import com.example.magneticcamera.ui.common.StatusText
 @Composable
 fun ScanSetupScreen(
     state: ScanUiState,
+    cameraAvailable: Boolean,
     onStartSensor: () -> Unit,
     onStopSensor: () -> Unit,
     onBack: () -> Unit,
@@ -143,9 +144,19 @@ fun ScanSetupScreen(
                 Switch(checked = state.setup.shouldTakePhoto, onCheckedChange = onPhotoChoiceChange)
             }
             if (state.setup.shouldTakePhoto) {
-                Button(modifier = Modifier.fillMaxWidth(), onClick = onTakePhoto) {
+                Button(
+                    modifier = Modifier.fillMaxWidth(),
+                    enabled = cameraAvailable,
+                    onClick = onTakePhoto
+                ) {
                     Icon(Icons.Default.CameraAlt, contentDescription = null)
-                    Text(if (state.photoUri == null) "Take Reference Photo" else "Retake Reference Photo")
+                    Text(
+                        when {
+                            !cameraAvailable -> "Camera Unavailable"
+                            state.photoUri == null -> "Take Reference Photo"
+                            else -> "Retake Reference Photo"
+                        }
+                    )
                 }
                 OutlinedButton(
                     modifier = Modifier.fillMaxWidth(),
@@ -154,10 +165,16 @@ fun ScanSetupScreen(
                     Icon(Icons.Default.PhotoLibrary, contentDescription = null)
                     Text(if (state.photoUri == null) "Import Reference Photo" else "Replace With Imported Photo")
                 }
+                if (!cameraAvailable) {
+                    Text(
+                        "Camera hardware is unavailable on this device. You can import a reference image or scan without a photo.",
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
             }
         }
 
-        if (state.photoUri != null) {
+        if (state.setup.shouldTakePhoto && state.photoUri != null) {
             InstrumentPanel(title = "Scan Area") {
                 Text(
                     "Drag the four corners to cover the physical area you will scan.",
@@ -226,6 +243,7 @@ fun ScanSetupScreen(
 
 @Composable
 fun CameraCaptureScreen(
+    cameraAvailable: Boolean,
     photoFileProvider: () -> java.io.File,
     onPhotoSaved: (String) -> Unit,
     onBack: () -> Unit,
@@ -237,7 +255,8 @@ fun CameraCaptureScreen(
     var error by remember { mutableStateOf<String?>(null) }
     var hasPermission by remember {
         mutableStateOf(
-            ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED
+            cameraAvailable &&
+                ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED
         )
     }
     val permissionLauncher = rememberLauncherForActivityResult(
@@ -249,8 +268,8 @@ fun CameraCaptureScreen(
         }
     }
 
-    LaunchedEffect(Unit) {
-        if (!hasPermission) permissionLauncher.launch(Manifest.permission.CAMERA)
+    LaunchedEffect(cameraAvailable) {
+        if (cameraAvailable && !hasPermission) permissionLauncher.launch(Manifest.permission.CAMERA)
     }
 
     Column(
@@ -271,7 +290,7 @@ fun CameraCaptureScreen(
 
         MessagePanel(message = null, errorMessage = error)
 
-        if (hasPermission) {
+        if (cameraAvailable && hasPermission) {
             CameraPreview(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -302,7 +321,11 @@ fun CameraCaptureScreen(
         } else {
             InstrumentPanel(title = "Camera Unavailable") {
                 Text(
-                    "Surface scanning still works without a photo. You can generate a heatmap and export JSON/CSV.",
+                    if (cameraAvailable) {
+                        "Surface scanning still works without a photo. You can generate a heatmap and export JSON/CSV."
+                    } else {
+                        "This device does not expose camera hardware. You can still run a grid scan without a reference photo."
+                    },
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
                 OutlinedButton(modifier = Modifier.fillMaxWidth(), onClick = onSkipPhoto) {

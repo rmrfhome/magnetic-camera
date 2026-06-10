@@ -1,6 +1,6 @@
 # Magnetic Camera
 
-Android prototype that turns a phone magnetometer into a manual magnetic-field scanner. It reads the best available magnetic sensor, lets the user set a local baseline, captures a manual grid scan, renders a heatmap, optionally overlays it on a reference photo, and saves local PNG/JSON/CSV exports.
+Android prototype that turns a phone magnetometer into a manual magnetic-field scanner. It reads the best available magnetic sensor, lets the user set a local baseline, captures a manual grid scan, renders a heatmap, optionally overlays it on a reference photo, and saves local PNG/JSON/CSV exports. App data backup is disabled so scans remain local to the device unless the user explicitly shares exported files.
 
 The app is intentionally honest about the physics: a phone has one magnetometer point, not a sensor array. Heatmaps are reconstructed from many physical positions.
 

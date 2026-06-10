@@ -13,6 +13,7 @@ This checklist separates checks that can run on the workstation from checks that
 - [x] Camera hardware is optional.
 - [x] Compass/magnetometer hardware is optional, so the app can open on devices without a magnetometer and show an explicit explanation.
 - [x] No location, contacts, microphone, network, account, or background permissions are declared.
+- [x] App data backup is disabled in the manifest, keeping saved scans local unless the user explicitly shares exports.
 
 ## Pixel 8 Device Prep
 

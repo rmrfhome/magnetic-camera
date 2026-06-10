@@ -18,17 +18,30 @@ data class SessionWithCells(
 )
 
 @Dao
-interface ScanDao {
+abstract class ScanDao {
     @Query("SELECT * FROM ScanSessionEntity ORDER BY createdAtMillis DESC")
-    fun observeSessions(): Flow<List<ScanSessionEntity>>
+    abstract fun observeSessions(): Flow<List<ScanSessionEntity>>
 
     @Transaction
     @Query("SELECT * FROM ScanSessionEntity WHERE id = :id")
-    suspend fun getSession(id: String): SessionWithCells?
+    abstract suspend fun getSession(id: String): SessionWithCells?
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
-    suspend fun insertSession(session: ScanSessionEntity)
+    protected abstract suspend fun insertSession(session: ScanSessionEntity)
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
-    suspend fun insertCells(cells: List<GridCellMeasurementEntity>)
+    protected abstract suspend fun insertCells(cells: List<GridCellMeasurementEntity>)
+
+    @Query("DELETE FROM GridCellMeasurementEntity WHERE sessionId = :sessionId")
+    protected abstract suspend fun deleteCellsForSession(sessionId: String)
+
+    @Transaction
+    open suspend fun replaceSessionWithCells(
+        session: ScanSessionEntity,
+        cells: List<GridCellMeasurementEntity>
+    ) {
+        insertSession(session)
+        deleteCellsForSession(session.id)
+        insertCells(cells)
+    }
 }

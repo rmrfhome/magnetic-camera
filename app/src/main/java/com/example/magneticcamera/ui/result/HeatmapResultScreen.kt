@@ -28,10 +28,6 @@ import androidx.compose.material3.Slider
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.geometry.Offset
@@ -57,11 +53,11 @@ fun HeatmapResultScreen(
     onPaletteChange: (PaletteMode) -> Unit,
     onNormalizationChange: (NormalizationMode) -> Unit,
     onOpacityChange: (Float) -> Unit,
+    onShowGridChange: (Boolean) -> Unit,
     onShowLegendChange: (Boolean) -> Unit,
     onSave: () -> Unit,
     onGallery: () -> Unit
 ) {
-    var showGrid by remember { mutableStateOf(true) }
     val heatmap = state.heatmap
     val photo = rememberBitmap(state.photoUri)
     val values = state.cells.mapNotNull { cell ->
@@ -118,7 +114,7 @@ fun HeatmapResultScreen(
                     } else {
                         HeatmapPreview(render = heatmap, modifier = Modifier.matchParentSize())
                     }
-                    if (showGrid) {
+                    if (state.showGrid) {
                         if (photo != null) {
                             RectangularGridOverlay(
                                 rows = state.setup.gridHeight,
@@ -151,9 +147,9 @@ fun HeatmapResultScreen(
             }
 
             InstrumentPanel(title = "Statistics") {
-                StatusText("Mean $metricLabel", "${MagneticMath.mean(values).format(2)} µT")
-                StatusText("Std dev", "${MagneticMath.stdDev(values).format(2)} µT")
-                StatusText("Max $metricLabel", "${(values.maxOrNull() ?: 0f).format(2)} µT")
+                StatusText("Mean $metricLabel", formatMicroTesla(MagneticMath.mean(values)))
+                StatusText("Std dev", formatMicroTesla(MagneticMath.stdDev(values)))
+                StatusText("Max $metricLabel", formatMicroTesla(values.maxOrNull()))
                 StatusText("Cells", "${state.cells.count { it.sampleCount > 0 }}/${state.totalCells}")
             }
 
@@ -162,7 +158,7 @@ fun HeatmapResultScreen(
                 Slider(value = state.opacity, onValueChange = onOpacityChange)
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                     Text("Show grid")
-                    Switch(checked = showGrid, onCheckedChange = { showGrid = it })
+                    Switch(checked = state.showGrid, onCheckedChange = onShowGridChange)
                 }
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                     Text("Show legend")
@@ -307,4 +303,8 @@ private fun GridOverlay(rows: Int, cols: Int, modifier: Modifier = Modifier) {
 
 private fun Float.format(decimals: Int): String {
     return "%.${decimals}f".format(this)
+}
+
+private fun formatMicroTesla(value: Float?): String {
+    return value?.takeIf { it.isFinite() }?.let { "${it.format(2)} µT" } ?: "--"
 }

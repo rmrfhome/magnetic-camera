@@ -27,6 +27,7 @@ data class ScanUiState(
     val paletteMode: PaletteMode = PaletteMode.Scientific,
     val normalizationMode: NormalizationMode = NormalizationMode.AutoLocal,
     val opacity: Float = 0.72f,
+    val showGrid: Boolean = true,
     val showLegend: Boolean = true,
     val savedSessionId: String? = null,
     val message: String? = null,

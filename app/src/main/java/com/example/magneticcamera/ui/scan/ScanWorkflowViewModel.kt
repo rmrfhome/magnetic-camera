@@ -3,6 +3,7 @@ package com.example.magneticcamera.ui.scan
 import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
+import android.hardware.SensorManager
 import android.net.Uri
 import android.os.SystemClock
 import androidx.lifecycle.ViewModel
@@ -96,7 +97,7 @@ class ScanWorkflowViewModel(
                         latestSample = processed,
                         stabilityStdDev = stability,
                         isStable = stable,
-                        errorMessage = null
+                        errorMessage = unreliableAccuracyMessage(processed.accuracy)
                     )
                 }
                 maybeAutoCapture(stable)
@@ -140,7 +141,16 @@ class ScanWorkflowViewModel(
     }
 
     fun updatePhotoChoice(shouldTakePhoto: Boolean) {
-        _uiState.value = _uiState.value.copy(setup = _uiState.value.setup.copy(shouldTakePhoto = shouldTakePhoto))
+        val state = _uiState.value
+        _uiState.value = if (shouldTakePhoto) {
+            state.copy(setup = state.setup.copy(shouldTakePhoto = true))
+        } else {
+            state.copy(
+                setup = state.setup.copy(shouldTakePhoto = false),
+                photoUri = null,
+                overlayArea = PhotoOverlayArea.FullFrame
+            )
+        }
         persistDraftIfStarted()
     }
 
@@ -163,6 +173,10 @@ class ScanWorkflowViewModel(
         _uiState.value = _uiState.value.copy(opacity = opacity.coerceIn(0f, 1f))
     }
 
+    fun updateShowGrid(showGrid: Boolean) {
+        _uiState.value = _uiState.value.copy(showGrid = showGrid)
+    }
+
     fun updateShowLegend(showLegend: Boolean) {
         _uiState.value = _uiState.value.copy(showLegend = showLegend)
     }
@@ -173,7 +187,12 @@ class ScanWorkflowViewModel(
     }
 
     fun setPhotoUri(uri: String?) {
-        _uiState.value = _uiState.value.copy(photoUri = uri)
+        val state = _uiState.value
+        _uiState.value = state.copy(
+            photoUri = uri,
+            overlayArea = PhotoOverlayArea.FullFrame,
+            setup = state.setup.copy(shouldTakePhoto = uri != null)
+        )
         persistDraftIfStarted()
     }
 
@@ -195,6 +214,7 @@ class ScanWorkflowViewModel(
                 .onSuccess { importedUri ->
                     _uiState.value = _uiState.value.copy(
                         photoUri = importedUri,
+                        overlayArea = PhotoOverlayArea.FullFrame,
                         setup = _uiState.value.setup.copy(shouldTakePhoto = true),
                         message = "Imported reference photo."
                     )
@@ -347,6 +367,13 @@ class ScanWorkflowViewModel(
                 col = col,
                 samples = samples
             )
+            if (measurement.sampleCount <= 0) {
+                _uiState.value = _uiState.value.copy(
+                    isCapturing = false,
+                    errorMessage = "No usable magnetic samples were captured. Keep the scan screen open and try this cell again."
+                )
+                return@launch
+            }
             _uiState.value = _uiState.value.copy(
                 isCapturing = false,
                 cells = _uiState.value.cells + measurement,
@@ -366,6 +393,7 @@ class ScanWorkflowViewModel(
             return
         }
         viewModelScope.launch {
+            val photoUri = state.photoUri.takeIf { state.setup.shouldTakePhoto }
             val (exportHeatmap, overlayBitmap) = withContext(Dispatchers.Default) {
                 val render = buildHeatmap(state, 2048, 2048)
                 render to buildOverlayBitmap(state, render)
@@ -377,7 +405,7 @@ class ScanWorkflowViewModel(
                 gridWidth = state.setup.gridWidth,
                 gridHeight = state.setup.gridHeight,
                 baseline = baseline,
-                photoUri = state.photoUri,
+                photoUri = photoUri,
                 overlayArea = state.overlayArea,
                 cells = state.cells
             )
@@ -386,6 +414,7 @@ class ScanWorkflowViewModel(
                 sensorInfo = sensorReader.sensorInfo.value,
                 heatmapRender = exportHeatmap,
                 overlayBitmap = overlayBitmap,
+                includeGrid = state.showGrid,
                 includeLegend = state.showLegend
             )
             _uiState.value = _uiState.value.copy(
@@ -480,6 +509,7 @@ class ScanWorkflowViewModel(
     private fun persistDraftIfStarted() {
         val state = _uiState.value
         if (state.baseline == null && state.photoUri == null && state.cells.isEmpty() && !state.isScanStarted) {
+            draftStore.clear()
             return
         }
         draftStore.save(
@@ -564,17 +594,28 @@ class ScanWorkflowViewModel(
         return "This device does not expose a magnetic field sensor. Magnetic Camera cannot scan magnetic fields on this device."
     }
 
+    private fun unreliableAccuracyMessage(accuracy: Int): String? {
+        return if (accuracy == SensorManager.SENSOR_STATUS_UNRELIABLE) {
+            "Sensor accuracy is currently unreliable. Move the phone in a figure-eight motion or recalibrate baseline."
+        } else {
+            null
+        }
+    }
+
     private fun buildOverlayBitmap(
         state: ScanUiState,
         heatmap: com.example.magneticcamera.core.graphics.HeatmapRender
     ): Bitmap? {
-        val photoUri = state.photoUri ?: return null
+        val photoUri = state.photoUri.takeIf { state.setup.shouldTakePhoto } ?: return null
         val photo = loadBitmap(photoUri) ?: return null
         return overlayRenderer.renderRectangularOverlay(
             photo = photo,
             heatmap = heatmap.toBitmap(),
             area = state.overlayArea,
-            opacity = state.opacity
+            opacity = state.opacity,
+            showGrid = state.showGrid,
+            gridWidth = state.setup.gridWidth,
+            gridHeight = state.setup.gridHeight
         )
     }
 

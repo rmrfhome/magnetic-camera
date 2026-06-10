@@ -124,6 +124,7 @@ fun AppNavHost(container: AppContainer) {
         composable(Routes.ScanSetup) {
             ScanSetupScreen(
                 state = scanState,
+                cameraAvailable = cameraAvailable,
                 onStartSensor = scanViewModel::startSensor,
                 onStopSensor = scanViewModel::stopSensor,
                 onBack = { navController.popBackStack() },
@@ -146,6 +147,7 @@ fun AppNavHost(container: AppContainer) {
 
         composable(Routes.CameraCapture) {
             CameraCaptureScreen(
+                cameraAvailable = cameraAvailable,
                 photoFileProvider = scanViewModel::preparePhotoFile,
                 onPhotoSaved = { uri ->
                     scanViewModel.setPhotoUri(uri)
@@ -183,6 +185,7 @@ fun AppNavHost(container: AppContainer) {
                 onPaletteChange = scanViewModel::updatePalette,
                 onNormalizationChange = scanViewModel::updateNormalization,
                 onOpacityChange = scanViewModel::updateOpacity,
+                onShowGridChange = scanViewModel::updateShowGrid,
                 onShowLegendChange = scanViewModel::updateShowLegend,
                 onSave = scanViewModel::saveResult,
                 onGallery = { navController.navigate(Routes.Gallery) }

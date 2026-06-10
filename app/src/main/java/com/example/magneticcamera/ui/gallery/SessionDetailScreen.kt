@@ -2,6 +2,7 @@ package com.example.magneticcamera.ui.gallery
 
 import android.content.Context
 import android.content.Intent
+import android.content.ClipData
 import android.net.Uri
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.horizontalScroll
@@ -44,6 +45,8 @@ import com.example.magneticcamera.ui.common.MessagePanel
 import com.example.magneticcamera.ui.common.StatusText
 import com.example.magneticcamera.ui.common.rememberBitmap
 import java.io.File
+import java.text.DateFormat
+import java.util.Date
 
 @Composable
 fun SessionDetailScreen(
@@ -102,10 +105,12 @@ fun SessionDetailScreen(
                 }
                 item {
                     InstrumentPanel(title = "Metadata") {
+                        StatusText("Created", formatDate(session.createdAtMillis))
                         StatusText("Grid", "${session.gridWidth}x${session.gridHeight}")
                         StatusText("Device", "${session.deviceManufacturer} ${session.deviceModel}")
                         StatusText("Android", session.androidVersion)
                         StatusText("Sensor", session.sensorName ?: "Unknown")
+                        StatusText("Sensor vendor", session.sensorVendor ?: "Unknown")
                         StatusText("Sensor type", magneticSensorTypeLabel(session.sensorType))
                         StatusText("Baseline", "${"%.1f".format(session.baselineMagnitude)} µT")
                         StatusText("Heatmap PNG", session.heatmapImageUri ?: "--")
@@ -161,7 +166,7 @@ fun SessionDetailScreen(
                 item {
                     InstrumentPanel(title = "Raw Grid Values") {
                         Text(
-                            "row,col,samples,x_mean,y_mean,z_mean,magnitude_mean,magnitude_median,magnitude_min,magnitude_max,magnitude_stddev,magnitude_delta_mean,vector_delta_mean,vector_delta_median,vector_delta_min,vector_delta_max,vector_delta_stddev,accuracy",
+                            "session_id,cell_id,row,col,sample_count,captured_at_millis,x_mean,y_mean,z_mean,magnitude_mean,magnitude_median,magnitude_min,magnitude_max,magnitude_stddev,magnitude_delta_mean,vector_delta_mean,vector_delta_median,vector_delta_min,vector_delta_max,vector_delta_stddev,accuracy",
                             modifier = Modifier.horizontalScroll(rememberScrollState()),
                             color = MaterialTheme.colorScheme.primary,
                             fontFamily = FontFamily.Monospace
@@ -171,9 +176,12 @@ fun SessionDetailScreen(
                 items(sessionWithCells.cells.sortedWith(compareBy({ it.row }, { it.col }))) { cell ->
                     Text(
                         listOf(
+                            cell.sessionId,
+                            cell.id,
                             cell.row,
                             cell.col,
                             cell.sampleCount,
+                            cell.capturedAtMillis,
                             cell.xMean.format(3),
                             cell.yMean.format(3),
                             cell.zMean.format(3),
@@ -240,6 +248,7 @@ private fun shareExport(
     val sendIntent = Intent(Intent.ACTION_SEND).apply {
         type = mimeType
         putExtra(Intent.EXTRA_STREAM, contentUri)
+        clipData = ClipData.newUri(context.contentResolver, label, contentUri)
         addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
     }
     context.startActivity(Intent.createChooser(sendIntent, label))
@@ -248,4 +257,8 @@ private fun shareExport(
 
 private fun Float.format(decimals: Int): String {
     return "%.${decimals}f".format(this)
+}
+
+private fun formatDate(millis: Long): String {
+    return DateFormat.getDateTimeInstance(DateFormat.MEDIUM, DateFormat.SHORT).format(Date(millis))
 }

@@ -1,5 +1,6 @@
 package com.example.magneticcamera.ui.scan
 
+import android.hardware.SensorManager
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
@@ -100,6 +101,8 @@ fun ScanCaptureScreen(
                 )
             }
             StatusText("Mode", state.setup.captureMode.name)
+            val accuracyLabel = state.latestSample?.accuracy.toAccuracyLabel()
+            StatusText("Accuracy", accuracyLabel, alert = accuracyLabel == "Unreliable")
             StatusText("Captured", "${state.cells.size}/${state.totalCells}")
         }
 
@@ -223,4 +226,14 @@ private fun StabilityRing(
 
 private fun Float.format(decimals: Int): String {
     return "%.${decimals}f".format(this)
+}
+
+private fun Int?.toAccuracyLabel(): String {
+    return when (this) {
+        SensorManager.SENSOR_STATUS_ACCURACY_HIGH -> "High"
+        SensorManager.SENSOR_STATUS_ACCURACY_MEDIUM -> "Medium"
+        SensorManager.SENSOR_STATUS_ACCURACY_LOW -> "Low"
+        SensorManager.SENSOR_STATUS_UNRELIABLE -> "Unreliable"
+        else -> "Unknown"
+    }
 }

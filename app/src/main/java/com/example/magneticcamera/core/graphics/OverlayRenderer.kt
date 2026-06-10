@@ -13,15 +13,44 @@ class OverlayRenderer {
         photo: Bitmap,
         heatmap: Bitmap,
         area: PhotoOverlayArea,
-        opacity: Float
+        opacity: Float,
+        showGrid: Boolean = false,
+        gridWidth: Int = 0,
+        gridHeight: Int = 0
     ): Bitmap {
         val output = photo.copy(Bitmap.Config.ARGB_8888, true)
         val rect = area.toRect(photo.width.toFloat(), photo.height.toFloat())
+        val canvas = Canvas(output)
         val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
             alpha = (opacity.coerceIn(0f, 1f) * 255).toInt()
         }
-        Canvas(output).drawBitmap(heatmap, null, rect, paint)
+        canvas.drawBitmap(heatmap, null, rect, paint)
+        if (showGrid) {
+            drawGrid(canvas, rect, gridWidth, gridHeight)
+        }
         return output
+    }
+
+    private fun drawGrid(canvas: Canvas, rect: RectF, cols: Int, rows: Int) {
+        if (cols <= 1 && rows <= 1) return
+        val shadowPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = android.graphics.Color.argb(130, 0, 0, 0)
+            strokeWidth = 5f
+        }
+        val linePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = android.graphics.Color.argb(190, 255, 255, 255)
+            strokeWidth = 2f
+        }
+        listOf(shadowPaint, linePaint).forEach { paint ->
+            for (col in 1 until cols) {
+                val x = rect.left + rect.width() * col / cols
+                canvas.drawLine(x, rect.top, x, rect.bottom, paint)
+            }
+            for (row in 1 until rows) {
+                val y = rect.top + rect.height() * row / rows
+                canvas.drawLine(rect.left, y, rect.right, y, paint)
+            }
+        }
     }
 
     private fun PhotoOverlayArea.toRect(width: Float, height: Float): RectF {

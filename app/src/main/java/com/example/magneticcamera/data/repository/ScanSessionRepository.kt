@@ -16,6 +16,7 @@ interface ScanSessionRepository {
         sensorInfo: MagneticSensorInfo?,
         heatmapRender: HeatmapRender,
         overlayBitmap: Bitmap?,
+        includeGrid: Boolean,
         includeLegend: Boolean
     ): String
 }
