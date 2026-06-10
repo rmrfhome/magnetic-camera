@@ -31,6 +31,7 @@ interface MagneticSensorReader {
     val samples: Flow<MagneticSample>
     val sensorInfo: StateFlow<MagneticSensorInfo?>
     val latestAccuracy: StateFlow<Int?>
+    val diagnosticMessage: StateFlow<String?>
 
     fun start(config: SensorReadConfig = SensorReadConfig())
     fun stop()

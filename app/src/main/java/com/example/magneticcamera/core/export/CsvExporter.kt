@@ -32,9 +32,22 @@ class CsvExporter {
                 cell.vectorDeltaMax,
                 cell.vectorDeltaStdDev,
                 cell.accuracy
-            ).joinToString(",") { escapeCsv(it.toString()) }
+            ).joinToString(",") { formatCsvValue(it) }
         }
         return (listOf(header) + rows).joinToString("\n")
+    }
+
+    private fun formatCsvValue(value: Any): String {
+        val text = when (value) {
+            is Float -> value.csvNumber()
+            is Double -> value.toFloat().csvNumber()
+            else -> value.toString()
+        }
+        return escapeCsv(text)
+    }
+
+    private fun Float.csvNumber(): String {
+        return if (isFinite()) toString() else "0.0"
     }
 
     private fun escapeCsv(value: String): String {

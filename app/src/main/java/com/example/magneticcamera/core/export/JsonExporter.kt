@@ -19,6 +19,7 @@ class JsonExporter {
             """
             |    {
             |      "id": "${cell.id.escapeJson()}",
+            |      "sessionId": "${cell.sessionId.escapeJson()}",
             |      "row": ${cell.row},
             |      "col": ${cell.col},
             |      "sampleCount": ${cell.sampleCount},

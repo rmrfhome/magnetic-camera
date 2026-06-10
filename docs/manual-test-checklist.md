@@ -1,6 +1,6 @@
 # Manual Test Checklist
 
-Last local verification: 2026-06-10.
+Last local verification: 2026-06-11.
 
 This checklist separates checks that can run on the workstation from checks that require the target Pixel 8 hardware.
 

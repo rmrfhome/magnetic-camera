@@ -42,6 +42,7 @@ fun HomeScreen(
     onGallery: () -> Unit,
     onSettings: () -> Unit,
     partialScanLabel: String?,
+    partialScanActionLabel: String,
     onResumeScan: () -> Unit,
     onDiscardPartialScan: () -> Unit
 ) {
@@ -53,7 +54,7 @@ fun HomeScreen(
             text = {
                 Text(
                     "Magnetic Camera uses your phone's magnetometer. The phone measures the magnetic field at one sensor point inside the device. To create an image-like heatmap, you scan multiple positions over a surface.\n\n" +
-                        "This app is experimental. It is not an X-ray, not a wall-wire detector, not a medical device, and not a safety instrument."
+                        "This app is experimental. It is not an X-ray, not a wall-wire detector, not a medical device, not a safety instrument, and not a professional diagnostic tool."
                 )
             },
             confirmButton = {
@@ -128,7 +129,7 @@ fun HomeScreen(
                 Text(partialScanLabel, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     Button(modifier = Modifier.weight(1f), onClick = onResumeScan) {
-                        Text("Resume")
+                        Text(partialScanActionLabel)
                     }
                     TextButton(modifier = Modifier.weight(1f), onClick = onDiscardPartialScan) {
                         Text("Discard")
@@ -156,12 +157,22 @@ fun HomeScreen(
                 value = if (cameraAvailable) "Available" else "Unavailable",
                 alert = !cameraAvailable
             )
+            if (sensorInfo?.isAvailable == false) {
+                Text(
+                    "This device does not expose a magnetic field sensor. Magnetic Camera cannot scan magnetic fields on this device.",
+                    color = MaterialTheme.colorScheme.error
+                )
+            }
         }
 
         InstrumentPanel(title = "Physical Limits") {
             Text(
                 "Heatmaps are reconstructed measurements, not direct camera images. The sensor point is inside the phone and may not align with the visible camera center.",
                 color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Text(
+                "Magnetic Camera is not an X-ray, wall-wire detector, safety instrument, medical device, or professional diagnostic tool.",
+                color = MaterialTheme.colorScheme.error
             )
         }
 

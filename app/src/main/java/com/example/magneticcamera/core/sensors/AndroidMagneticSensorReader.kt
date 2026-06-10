@@ -5,7 +5,6 @@ import android.hardware.Sensor
 import android.hardware.SensorEvent
 import android.hardware.SensorEventListener
 import android.hardware.SensorManager
-import com.example.magneticcamera.core.math.MagneticMath
 import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -29,6 +28,9 @@ class AndroidMagneticSensorReader(
 
     private val _latestAccuracy = MutableStateFlow<Int?>(null)
     override val latestAccuracy: StateFlow<Int?> = _latestAccuracy
+
+    private val _diagnosticMessage = MutableStateFlow<String?>(null)
+    override val diagnosticMessage: StateFlow<String?> = _diagnosticMessage
 
     private var activeSensor: Sensor? = null
 
@@ -54,8 +56,18 @@ class AndroidMagneticSensorReader(
         val x = values[0]
         val y = values[1]
         val z = values[2]
-        if (!x.isFinite() || !y.isFinite() || !z.isFinite()) return
+        val validation = MagneticSampleValidator.validate(
+            xMicroTesla = x,
+            yMicroTesla = y,
+            zMicroTesla = z,
+            maximumRangeMicroTesla = event.sensor.maximumRange
+        )
+        if (validation is ValidationResult.Rejected) {
+            _diagnosticMessage.value = validation.warning
+            return
+        }
         _latestAccuracy.value = event.accuracy
+        _diagnosticMessage.value = null
 
         val sample = MagneticSample(
             timestampNanos = event.timestamp,
@@ -67,7 +79,7 @@ class AndroidMagneticSensorReader(
             biasXMicroTesla = values.getOrNull(3)?.takeIf { it.isFinite() },
             biasYMicroTesla = values.getOrNull(4)?.takeIf { it.isFinite() },
             biasZMicroTesla = values.getOrNull(5)?.takeIf { it.isFinite() },
-            magnitudeMicroTesla = MagneticMath.magnitude(x, y, z)
+            magnitudeMicroTesla = (validation as ValidationResult.Accepted).magnitudeMicroTesla
         )
         _samples.tryEmit(sample)
     }

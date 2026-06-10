@@ -17,17 +17,29 @@ class ScanDraftStore(
     private val prefs = context.applicationContext.getSharedPreferences("scan-draft", Context.MODE_PRIVATE)
 
     fun save(draft: ScanDraft) {
-        prefs.edit().putString(KEY_DRAFT, draft.toJson().toString()).apply()
+        prefs.edit().putString(KEY_DRAFT, ScanDraftCodec.encode(draft)).apply()
     }
 
     fun load(): ScanDraft? {
         val json = prefs.getString(KEY_DRAFT, null) ?: return null
-        return runCatching { JSONObject(json).toDraft() }.getOrNull()
+        return runCatching { ScanDraftCodec.decode(json) }
+            .onFailure { clear() }
+            .getOrNull()
     }
 
     fun clear() {
         prefs.edit().remove(KEY_DRAFT).apply()
     }
+
+    private companion object {
+        const val KEY_DRAFT = "draft"
+    }
+}
+
+internal object ScanDraftCodec {
+    fun encode(draft: ScanDraft): String = draft.toJson().toString()
+
+    fun decode(json: String): ScanDraft = JSONObject(json).toDraft()
 
     private fun ScanDraft.toJson(): JSONObject {
         return JSONObject()
@@ -162,6 +174,8 @@ class ScanDraftStore(
     }
 
     private fun JSONObject.toCell(): GridCellMeasurement {
+        val magnitudeMean = getFiniteFloat("magnitudeMean")
+        val vectorDeltaMean = getFiniteFloat("vectorDeltaMean")
         return GridCellMeasurement(
             id = getString("id"),
             sessionId = getString("sessionId"),
@@ -169,25 +183,31 @@ class ScanDraftStore(
             col = getInt("col"),
             sampleCount = getInt("sampleCount"),
             capturedAtMillis = getLong("capturedAtMillis"),
-            xMean = getDouble("xMean").toFloat(),
-            yMean = getDouble("yMean").toFloat(),
-            zMean = getDouble("zMean").toFloat(),
-            magnitudeMean = getDouble("magnitudeMean").toFloat(),
-            magnitudeMedian = getDouble("magnitudeMedian").toFloat(),
-            magnitudeMin = getDouble("magnitudeMin").toFloat(),
-            magnitudeMax = getDouble("magnitudeMax").toFloat(),
-            magnitudeStdDev = getDouble("magnitudeStdDev").toFloat(),
-            vectorDeltaMean = getDouble("vectorDeltaMean").toFloat(),
-            vectorDeltaMedian = getDouble("vectorDeltaMedian").toFloat(),
-            vectorDeltaMin = getDouble("vectorDeltaMin").toFloat(),
-            vectorDeltaMax = getDouble("vectorDeltaMax").toFloat(),
-            vectorDeltaStdDev = getDouble("vectorDeltaStdDev").toFloat(),
-            magnitudeDeltaMean = getDouble("magnitudeDeltaMean").toFloat(),
+            xMean = getFiniteFloat("xMean"),
+            yMean = getFiniteFloat("yMean"),
+            zMean = getFiniteFloat("zMean"),
+            magnitudeMean = magnitudeMean,
+            magnitudeMedian = optFiniteFloat("magnitudeMedian", magnitudeMean),
+            magnitudeMin = optFiniteFloat("magnitudeMin", magnitudeMean),
+            magnitudeMax = optFiniteFloat("magnitudeMax", magnitudeMean),
+            magnitudeStdDev = optFiniteFloat("magnitudeStdDev", 0f),
+            vectorDeltaMean = vectorDeltaMean,
+            vectorDeltaMedian = optFiniteFloat("vectorDeltaMedian", vectorDeltaMean),
+            vectorDeltaMin = optFiniteFloat("vectorDeltaMin", vectorDeltaMean),
+            vectorDeltaMax = optFiniteFloat("vectorDeltaMax", vectorDeltaMean),
+            vectorDeltaStdDev = getFiniteFloat("vectorDeltaStdDev"),
+            magnitudeDeltaMean = optFiniteFloat("magnitudeDeltaMean", 0f),
             accuracy = getInt("accuracy")
         )
     }
 
-    private companion object {
-        const val KEY_DRAFT = "draft"
+    private fun JSONObject.getFiniteFloat(name: String): Float {
+        return getDouble(name).toFloat().takeIf { it.isFinite() }
+            ?: error("Draft value $name must be finite.")
+    }
+
+    private fun JSONObject.optFiniteFloat(name: String, fallback: Float): Float {
+        if (!has(name) || isNull(name)) return fallback
+        return optDouble(name, fallback.toDouble()).toFloat().takeIf { it.isFinite() } ?: fallback
     }
 }

@@ -97,10 +97,17 @@ fun AppNavHost(container: AppContainer) {
                 onNewScan = { navController.navigate(Routes.ScanSetup) },
                 onGallery = { navController.navigate(Routes.Gallery) },
                 onSettings = { navController.navigate(Routes.Settings) },
-                partialScanLabel = scanState.takeIf { it.isScanStarted && !it.isComplete }?.let {
-                    "${it.cells.size} of ${it.totalCells} cells captured"
+                partialScanLabel = scanState.takeIf { it.isScanStarted }?.let {
+                    if (it.isComplete) {
+                        "Scan complete with ${it.cells.count { cell -> cell.sampleCount > 0 }} of ${it.totalCells} sampled cells. Save or export the result."
+                    } else {
+                        "${it.cells.size} of ${it.totalCells} cells captured"
+                    }
                 },
-                onResumeScan = { navController.navigate(Routes.ScanCapture) },
+                partialScanActionLabel = if (scanState.isComplete) "View Result" else "Resume",
+                onResumeScan = {
+                    navController.navigate(if (scanState.isComplete) Routes.Result else Routes.ScanCapture)
+                },
                 onDiscardPartialScan = scanViewModel::discardScan
             )
         }

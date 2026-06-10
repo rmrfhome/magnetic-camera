@@ -12,6 +12,7 @@ import com.example.magneticcamera.data.db.GridCellMeasurementEntity
 import com.example.magneticcamera.data.db.ScanDao
 import com.example.magneticcamera.data.db.ScanSessionEntity
 import com.example.magneticcamera.data.db.SessionWithCells
+import com.example.magneticcamera.domain.scan.GridCellMeasurement
 import com.example.magneticcamera.domain.scan.ScanSession
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
@@ -77,7 +78,7 @@ class ScanSessionRepositoryImpl(
                 sensorType = sensorInfo?.sensorType ?: -1,
                 gridWidth = session.gridWidth,
                 gridHeight = session.gridHeight,
-                maxVectorDelta = session.cells.maxOfOrNull { it.vectorDeltaMean } ?: 0f,
+                maxVectorDelta = maxFiniteVectorDelta(session.cells),
                 baselineX = session.baseline.xMean,
                 baselineY = session.baseline.yMean,
                 baselineZ = session.baseline.zMean,
@@ -124,5 +125,16 @@ class ScanSessionRepositoryImpl(
             }
         )
         session.id
+    }
+
+    internal companion object {
+        fun maxFiniteVectorDelta(cells: List<GridCellMeasurement>): Float {
+            return cells
+                .asSequence()
+                .map { it.vectorDeltaMean }
+                .filter { it.isFinite() }
+                .maxOrNull()
+                ?: 0f
+        }
     }
 }

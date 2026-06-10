@@ -68,12 +68,24 @@ class ScanWorkflowViewModel(
     val uiState: StateFlow<ScanUiState> = _uiState.asStateFlow()
 
     private var sensorJob: Job? = null
+    private var diagnosticJob: Job? = null
     private var lastAutoCaptureMillis = 0L
     private var lastUiUpdateNanos = 0L
     private var samplingMode = SensorSamplingMode.Game
+    private var diagnosticMessage: String? = null
+    private var diagnosticExpiresAtMillis = 0L
 
     init {
         restoreDraft()
+        diagnosticJob = viewModelScope.launch {
+            sensorReader.diagnosticMessage.collect { message ->
+                if (message != null) {
+                    diagnosticMessage = message
+                    diagnosticExpiresAtMillis = SystemClock.elapsedRealtime() + DIAGNOSTIC_MESSAGE_DURATION_MS
+                    _uiState.value = _uiState.value.copy(errorMessage = message)
+                }
+            }
+        }
     }
 
     fun startSensor() {
@@ -97,7 +109,7 @@ class ScanWorkflowViewModel(
                         latestSample = processed,
                         stabilityStdDev = stability,
                         isStable = stable,
-                        errorMessage = unreliableAccuracyMessage(processed.accuracy)
+                        errorMessage = activeDiagnosticMessage() ?: unreliableAccuracyMessage(processed.accuracy)
                     )
                 }
                 maybeAutoCapture(stable)
@@ -446,6 +458,7 @@ class ScanWorkflowViewModel(
 
     override fun onCleared() {
         super.onCleared()
+        diagnosticJob?.cancel()
         stopSensor()
     }
 
@@ -602,6 +615,13 @@ class ScanWorkflowViewModel(
         }
     }
 
+    private fun activeDiagnosticMessage(): String? {
+        if (diagnosticMessage == null) return null
+        if (SystemClock.elapsedRealtime() <= diagnosticExpiresAtMillis) return diagnosticMessage
+        diagnosticMessage = null
+        return null
+    }
+
     private fun buildOverlayBitmap(
         state: ScanUiState,
         heatmap: com.example.magneticcamera.core.graphics.HeatmapRender
@@ -625,5 +645,9 @@ class ScanWorkflowViewModel(
                 if (input == null) null else BitmapFactory.decodeStream(input)
             }
         }.getOrNull()
+    }
+
+    private companion object {
+        const val DIAGNOSTIC_MESSAGE_DURATION_MS = 4_000L
     }
 }

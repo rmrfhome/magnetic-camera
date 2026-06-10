@@ -33,8 +33,11 @@ class LiveMeterViewModel(
 
     private var sampleJob: Job? = null
     private var sensorInfoJob: Job? = null
+    private var diagnosticJob: Job? = null
     private var lastUiUpdateNanos = 0L
     private var samplingMode = SensorSamplingMode.Game
+    private var diagnosticMessage: String? = null
+    private var diagnosticExpiresAtMillis = 0L
 
     init {
         sensorInfoJob = viewModelScope.launch {
@@ -48,6 +51,15 @@ class LiveMeterViewModel(
                         _uiState.value.errorMessage
                     }
                 )
+            }
+        }
+        diagnosticJob = viewModelScope.launch {
+            sensorReader.diagnosticMessage.collect { message ->
+                if (message != null) {
+                    diagnosticMessage = message
+                    diagnosticExpiresAtMillis = SystemClock.elapsedRealtime() + DIAGNOSTIC_MESSAGE_DURATION_MS
+                    _uiState.value = _uiState.value.copy(errorMessage = message)
+                }
             }
         }
     }
@@ -65,7 +77,7 @@ class LiveMeterViewModel(
                         recentSamples = recentSamples.toList(),
                         samplingRateHz = calculateSampleRate(),
                         accuracyLabel = accuracyLabel(processed.accuracy),
-                        errorMessage = unreliableAccuracyMessage(processed.accuracy)
+                        errorMessage = activeDiagnosticMessage() ?: unreliableAccuracyMessage(processed.accuracy)
                     )
                 }
             }
@@ -143,6 +155,7 @@ class LiveMeterViewModel(
     override fun onCleared() {
         super.onCleared()
         sensorInfoJob?.cancel()
+        diagnosticJob?.cancel()
         stop()
     }
 
@@ -205,7 +218,18 @@ class LiveMeterViewModel(
         }
     }
 
+    private fun activeDiagnosticMessage(): String? {
+        if (diagnosticMessage == null) return null
+        if (SystemClock.elapsedRealtime() <= diagnosticExpiresAtMillis) return diagnosticMessage
+        diagnosticMessage = null
+        return null
+    }
+
     private fun noMagnetometerMessage(): String {
         return "This device does not expose a magnetic field sensor. Magnetic Camera cannot scan magnetic fields on this device."
+    }
+
+    private companion object {
+        const val DIAGNOSTIC_MESSAGE_DURATION_MS = 4_000L
     }
 }

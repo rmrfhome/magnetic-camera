@@ -55,6 +55,9 @@ class FakeMagneticSensorReader(
     )
     override val latestAccuracy: StateFlow<Int?> = _latestAccuracy
 
+    private val _diagnosticMessage = MutableStateFlow<String?>(null)
+    override val diagnosticMessage: StateFlow<String?> = _diagnosticMessage
+
     private var job: Job? = null
 
     override fun start(config: SensorReadConfig) {

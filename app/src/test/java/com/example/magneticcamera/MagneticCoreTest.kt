@@ -11,23 +11,34 @@ import com.example.magneticcamera.core.math.MagneticMath
 import com.example.magneticcamera.core.math.MedianFilter
 import com.example.magneticcamera.core.sensors.FakeMagneticSensorReader
 import com.example.magneticcamera.core.sensors.MagneticSample
+import com.example.magneticcamera.core.sensors.MagneticSampleValidator
 import com.example.magneticcamera.core.sensors.MagneticSensorInfo
 import com.example.magneticcamera.core.sensors.SensorReadConfig
 import com.example.magneticcamera.core.sensors.SensorSamplingMode
+import com.example.magneticcamera.core.sensors.ValidationResult
 import com.example.magneticcamera.core.sensors.magneticSensorTypeLabel
+import com.example.magneticcamera.core.storage.ScanDraftCodec
+import com.example.magneticcamera.data.repository.ScanSessionRepositoryImpl
 import com.example.magneticcamera.domain.calibration.BaselineCalibrator
 import com.example.magneticcamera.domain.model.MagneticBaseline
+import com.example.magneticcamera.domain.model.NormalizedPoint
+import com.example.magneticcamera.domain.model.PhotoOverlayArea
+import com.example.magneticcamera.domain.scan.CaptureMode
 import com.example.magneticcamera.domain.scan.GridScanController
 import com.example.magneticcamera.domain.scan.GridCellMeasurement
 import com.example.magneticcamera.domain.scan.NormalizationMode
+import com.example.magneticcamera.domain.scan.ScanDraft
 import com.example.magneticcamera.domain.scan.ScanSession
+import com.example.magneticcamera.domain.scan.ScanSetup
 import kotlin.math.sqrt
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeoutOrNull
+import org.json.JSONObject
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -111,6 +122,39 @@ class MagneticCoreTest {
         } finally {
             unreliable.stop()
         }
+    }
+
+    @Test
+    fun magneticSampleValidatorRejectsInvalidAndOutOfRangeSamples() {
+        val accepted = MagneticSampleValidator.validate(
+            xMicroTesla = 20f,
+            yMicroTesla = -5f,
+            zMicroTesla = 40f,
+            maximumRangeMicroTesla = 2_000f
+        )
+        assertTrue(accepted is ValidationResult.Accepted)
+
+        val invalid = MagneticSampleValidator.validate(
+            xMicroTesla = Float.NaN,
+            yMicroTesla = 0f,
+            zMicroTesla = 0f,
+            maximumRangeMicroTesla = 2_000f
+        )
+        assertEquals(
+            MagneticSampleValidator.INVALID_SAMPLE_WARNING,
+            (invalid as ValidationResult.Rejected).warning
+        )
+
+        val outOfRange = MagneticSampleValidator.validate(
+            xMicroTesla = 3_000f,
+            yMicroTesla = 0f,
+            zMicroTesla = 0f,
+            maximumRangeMicroTesla = 2_000f
+        )
+        assertEquals(
+            MagneticSampleValidator.OUT_OF_RANGE_WARNING,
+            (outOfRange as ValidationResult.Rejected).warning
+        )
     }
 
     @Test
@@ -294,6 +338,107 @@ class MagneticCoreTest {
     }
 
     @Test
+    fun scanDraftCodecRoundTripsInterruptedScanState() {
+        val baseline = MagneticBaseline(
+            createdAtMillis = 123L,
+            sampleCount = 4,
+            xMean = 1f,
+            yMean = 2f,
+            zMean = 3f,
+            magnitudeMean = 4f,
+            xStdDev = 0.1f,
+            yStdDev = 0.2f,
+            zStdDev = 0.3f,
+            magnitudeStdDev = 0.4f
+        )
+        val overlayArea = PhotoOverlayArea(
+            topLeft = NormalizedPoint(0.1f, 0.2f),
+            topRight = NormalizedPoint(0.9f, 0.2f),
+            bottomRight = NormalizedPoint(0.8f, 0.95f),
+            bottomLeft = NormalizedPoint(0.12f, 0.92f)
+        )
+        val draft = ScanDraft(
+            setup = ScanSetup(
+                name = "Interrupted scan",
+                gridWidth = 5,
+                gridHeight = 7,
+                shouldTakePhoto = true,
+                captureMode = CaptureMode.AutoWhenStable
+            ),
+            currentSessionId = "session-draft",
+            baseline = baseline,
+            photoUri = "content://magnetic-camera/photo/session-draft",
+            overlayArea = overlayArea,
+            isScanStarted = true,
+            cells = listOf(cell("session-draft").copy(row = 2, col = 3))
+        )
+
+        val restored = ScanDraftCodec.decode(ScanDraftCodec.encode(draft))
+
+        assertEquals(draft.setup, restored.setup)
+        assertEquals(draft.currentSessionId, restored.currentSessionId)
+        assertEquals(draft.baseline, restored.baseline)
+        assertEquals(draft.photoUri, restored.photoUri)
+        assertEquals(draft.overlayArea, restored.overlayArea)
+        assertEquals(draft.isScanStarted, restored.isScanStarted)
+        assertEquals(draft.cells, restored.cells)
+    }
+
+    @Test
+    fun scanDraftCodecRejectsCorruptedDrafts() {
+        assertTrue(runCatching { ScanDraftCodec.decode("{not-json") }.isFailure)
+        assertTrue(runCatching { ScanDraftCodec.decode("""{"setup":{}}""") }.isFailure)
+    }
+
+    @Test
+    fun scanDraftCodecRestoresLegacyCellsWithoutDerivedStats() {
+        val legacyJson = """
+            {
+              "setup": {
+                "name": "Legacy interrupted scan",
+                "gridWidth": 5,
+                "gridHeight": 5,
+                "shouldTakePhoto": false,
+                "captureMode": "Manual"
+              },
+              "currentSessionId": "legacy-session",
+              "isScanStarted": true,
+              "cells": [
+                {
+                  "id": "legacy-cell",
+                  "sessionId": "legacy-session",
+                  "row": 1,
+                  "col": 2,
+                  "sampleCount": 10,
+                  "capturedAtMillis": 42,
+                  "xMean": 1.0,
+                  "yMean": 2.0,
+                  "zMean": 3.0,
+                  "magnitudeMean": 4.0,
+                  "vectorDeltaMean": 6.0,
+                  "vectorDeltaStdDev": 0.7,
+                  "accuracy": 3
+                }
+              ]
+            }
+        """.trimIndent()
+
+        val restored = ScanDraftCodec.decode(legacyJson)
+        val cell = restored.cells.single()
+
+        assertEquals(true, restored.isScanStarted)
+        assertEquals(5, restored.setup.gridWidth)
+        assertEquals(4f, cell.magnitudeMedian, 0.0001f)
+        assertEquals(4f, cell.magnitudeMin, 0.0001f)
+        assertEquals(4f, cell.magnitudeMax, 0.0001f)
+        assertEquals(0f, cell.magnitudeStdDev, 0.0001f)
+        assertEquals(6f, cell.vectorDeltaMedian, 0.0001f)
+        assertEquals(6f, cell.vectorDeltaMin, 0.0001f)
+        assertEquals(6f, cell.vectorDeltaMax, 0.0001f)
+        assertEquals(0f, cell.magnitudeDeltaMean, 0.0001f)
+    }
+
+    @Test
     fun jsonExporterContainsRequiredSchemaFieldsAndCells() {
         val baseline = MagneticBaseline(
             createdAtMillis = 1L,
@@ -340,6 +485,7 @@ class MagneticCoreTest {
         assertTrue(json.contains("\"app\": \"Magnetic Camera\""))
         assertTrue(json.contains("\"schemaVersion\": 1"))
         assertTrue(json.contains("\"id\": \"scan-1\""))
+        assertTrue(json.contains("\"sessionId\": \"scan-1\""))
         assertTrue(json.contains("\"type\": ${Sensor.TYPE_MAGNETIC_FIELD_UNCALIBRATED}"))
         assertTrue(json.contains("\"width\": 1"))
         assertTrue(json.contains("\"row\": 0"))
@@ -402,6 +548,7 @@ class MagneticCoreTest {
         assertTrue(json.contains("\"name\": \"Pixel \\\"mag\\\"\""))
         assertTrue(json.contains("\"vendor\": \"Vendor\\tName\""))
         assertTrue(json.contains("\"id\": \"cell\\t1\""))
+        assertTrue(json.contains("\"sessionId\": \"scan\\\\1\""))
     }
 
     @Test
@@ -436,6 +583,75 @@ class MagneticCoreTest {
             csv.first()
         )
         assertEquals("scan-1,cell-1,0,0,12,2,1.0,2.0,3.0,4.0,4.0,3.0,5.0,0.5,2.0,6.0,6.0,5.0,7.0,0.7,3", csv[1])
+    }
+
+    @Test
+    fun exportersSanitizeNonFiniteCellValues() {
+        val baseline = MagneticBaseline(
+            createdAtMillis = 1L,
+            sampleCount = 4,
+            xMean = 1f,
+            yMean = 2f,
+            zMean = 3f,
+            magnitudeMean = 4f,
+            xStdDev = 0.1f,
+            yStdDev = 0.2f,
+            zStdDev = 0.3f,
+            magnitudeStdDev = 0.4f
+        )
+        val session = ScanSession(
+            id = "scan-1",
+            name = "Test scan",
+            createdAtMillis = 1_700_000_000_000L,
+            gridWidth = 1,
+            gridHeight = 1,
+            baseline = baseline,
+            photoUri = null,
+            cells = listOf(
+                cell("scan-1").copy(
+                    xMean = Float.NaN,
+                    yMean = Float.POSITIVE_INFINITY,
+                    magnitudeMean = Float.NEGATIVE_INFINITY,
+                    vectorDeltaMean = Float.NaN
+                )
+            )
+        )
+
+        val json = JsonExporter().export(
+            session = session,
+            deviceManufacturer = "Google",
+            deviceModel = "Pixel 8",
+            androidVersion = "15",
+            sensorInfo = null
+        )
+        val csv = CsvExporter().export(session)
+
+        assertFalse(json.contains("NaN"))
+        assertFalse(json.contains("Infinity"))
+        assertEquals(0.0, JSONObject(json).getJSONArray("cells").getJSONObject(0).getDouble("xMean"), 0.0)
+        assertFalse(csv.contains("NaN"))
+        assertFalse(csv.contains("Infinity"))
+    }
+
+    @Test
+    fun savedSessionSummaryIgnoresNonFiniteVectorDeltas() {
+        val cells = listOf(
+            cell("scan-1").copy(vectorDeltaMean = Float.NaN),
+            cell("scan-1").copy(id = "cell-2", vectorDeltaMean = 12f),
+            cell("scan-1").copy(id = "cell-3", vectorDeltaMean = Float.POSITIVE_INFINITY)
+        )
+
+        assertEquals(12f, ScanSessionRepositoryImpl.maxFiniteVectorDelta(cells), 0.0001f)
+        assertEquals(
+            0f,
+            ScanSessionRepositoryImpl.maxFiniteVectorDelta(
+                listOf(
+                    cell("scan-1").copy(vectorDeltaMean = Float.NaN),
+                    cell("scan-1").copy(id = "cell-2", vectorDeltaMean = Float.NEGATIVE_INFINITY)
+                )
+            ),
+            0.0001f
+        )
     }
 
     private fun sample(
