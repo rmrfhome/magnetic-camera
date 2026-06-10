@@ -6,6 +6,8 @@ import com.example.magneticcamera.domain.model.NormalizedPoint
 import com.example.magneticcamera.domain.model.PhotoOverlayArea
 import com.example.magneticcamera.domain.scan.CaptureMode
 import com.example.magneticcamera.domain.scan.GridCellMeasurement
+import com.example.magneticcamera.domain.scan.NormalizationMode
+import com.example.magneticcamera.domain.scan.PaletteMode
 import com.example.magneticcamera.domain.scan.ScanDraft
 import com.example.magneticcamera.domain.scan.ScanSetup
 import org.json.JSONArray
@@ -49,6 +51,11 @@ internal object ScanDraftCodec {
             .put("photoUri", photoUri)
             .put("overlayArea", overlayArea.toJson())
             .put("isScanStarted", isScanStarted)
+            .put("paletteMode", paletteMode.name)
+            .put("normalizationMode", normalizationMode.toJson())
+            .put("opacity", opacity.toDouble())
+            .put("showGrid", showGrid)
+            .put("showLegend", showLegend)
             .put("cells", JSONArray().also { array ->
                 cells.forEach { array.put(it.toJson()) }
             })
@@ -89,6 +96,16 @@ internal object ScanDraftCodec {
         return JSONObject().put("x", x.toDouble()).put("y", y.toDouble())
     }
 
+    private fun NormalizationMode.toJson(): JSONObject {
+        return when (this) {
+            NormalizationMode.AutoLocal -> JSONObject().put("type", "AutoLocal")
+            is NormalizationMode.BaselineDeltaFixedScale -> JSONObject()
+                .put("type", "BaselineDeltaFixedScale")
+                .put("maxDeltaMicroTesla", maxDeltaMicroTesla.toDouble())
+            NormalizationMode.AbsoluteField -> JSONObject().put("type", "AbsoluteField")
+        }
+    }
+
     private fun GridCellMeasurement.toJson(): JSONObject {
         return JSONObject()
             .put("id", id)
@@ -127,7 +144,12 @@ internal object ScanDraftCodec {
             isScanStarted = optBoolean("isScanStarted", cellsArray.length() > 0),
             cells = (0 until cellsArray.length()).map { index ->
                 cellsArray.getJSONObject(index).toCell()
-            }
+            },
+            paletteMode = optPaletteMode(),
+            normalizationMode = optNormalizationMode(),
+            opacity = optFiniteFloat("opacity", 0.72f).coerceIn(0f, 1f),
+            showGrid = optBoolean("showGrid", true),
+            showLegend = optBoolean("showLegend", true)
         )
     }
 
@@ -171,6 +193,22 @@ internal object ScanDraftCodec {
             x = optDouble("x", 0.0).toFloat().coerceIn(0f, 1f),
             y = optDouble("y", 0.0).toFloat().coerceIn(0f, 1f)
         )
+    }
+
+    private fun JSONObject.optPaletteMode(): PaletteMode {
+        return runCatching { PaletteMode.valueOf(optString("paletteMode")) }
+            .getOrDefault(PaletteMode.Scientific)
+    }
+
+    private fun JSONObject.optNormalizationMode(): NormalizationMode {
+        val json = optJSONObject("normalizationMode") ?: return NormalizationMode.AutoLocal
+        return when (json.optString("type")) {
+            "BaselineDeltaFixedScale" -> NormalizationMode.BaselineDeltaFixedScale(
+                json.optFiniteFloat("maxDeltaMicroTesla", 50f).coerceAtLeast(1f)
+            )
+            "AbsoluteField" -> NormalizationMode.AbsoluteField
+            else -> NormalizationMode.AutoLocal
+        }
     }
 
     private fun JSONObject.toCell(): GridCellMeasurement {

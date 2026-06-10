@@ -32,7 +32,9 @@ class PngExporter {
         file.parentFile?.mkdirs()
         val outputBitmap = if (legend == null) bitmap else bitmap.withLegend(legend)
         FileOutputStream(file).use { output ->
-            outputBitmap.compress(Bitmap.CompressFormat.PNG, 100, output)
+            check(outputBitmap.compress(Bitmap.CompressFormat.PNG, 100, output)) {
+                "Could not encode PNG export at ${file.absolutePath}."
+            }
         }
         return file.absolutePath
     }

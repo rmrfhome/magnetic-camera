@@ -126,29 +126,56 @@ class ScanWorkflowViewModel(
     }
 
     fun updateName(name: String) {
-        _uiState.value = _uiState.value.copy(setup = _uiState.value.setup.copy(name = name))
+        val state = _uiState.value
+        _uiState.value = state.copy(
+            setup = state.setup.copy(name = name),
+            savedSessionId = if (state.isScanStarted) null else state.savedSessionId
+        )
         persistDraftIfStarted()
     }
 
     fun updateGridSize(size: Int) {
-        _uiState.value = _uiState.value.copy(
-            setup = _uiState.value.setup.copy(gridWidth = size, gridHeight = size),
+        val state = _uiState.value
+        val sanitizedSize = size.coerceIn(1, 20)
+        if (state.setup.gridWidth == sanitizedSize && state.setup.gridHeight == sanitizedSize) return
+        val shouldResetStartedScan = state.isScanStarted
+        _uiState.value = state.copy(
+            currentSessionId = if (shouldResetStartedScan) UUID.randomUUID().toString() else state.currentSessionId,
+            setup = state.setup.copy(gridWidth = sanitizedSize, gridHeight = sanitizedSize),
+            isScanStarted = if (shouldResetStartedScan) false else state.isScanStarted,
             cells = emptyList(),
             heatmap = null,
-            savedSessionId = null
+            savedSessionId = null,
+            message = if (shouldResetStartedScan) {
+                "Grid changed to ${sanitizedSize}x$sanitizedSize. Begin the scan again so all cells match the new layout."
+            } else {
+                state.message
+            }
         )
         persistDraftIfStarted()
     }
 
     fun updateGridDimensions(width: Int, height: Int) {
-        _uiState.value = _uiState.value.copy(
-            setup = _uiState.value.setup.copy(
-                gridWidth = width.coerceIn(1, 20),
-                gridHeight = height.coerceIn(1, 20)
+        val state = _uiState.value
+        val sanitizedWidth = width.coerceIn(1, 20)
+        val sanitizedHeight = height.coerceIn(1, 20)
+        if (state.setup.gridWidth == sanitizedWidth && state.setup.gridHeight == sanitizedHeight) return
+        val shouldResetStartedScan = state.isScanStarted
+        _uiState.value = state.copy(
+            currentSessionId = if (shouldResetStartedScan) UUID.randomUUID().toString() else state.currentSessionId,
+            setup = state.setup.copy(
+                gridWidth = sanitizedWidth,
+                gridHeight = sanitizedHeight
             ),
+            isScanStarted = if (shouldResetStartedScan) false else state.isScanStarted,
             cells = emptyList(),
             heatmap = null,
-            savedSessionId = null
+            savedSessionId = null,
+            message = if (shouldResetStartedScan) {
+                "Grid changed to ${sanitizedWidth}x$sanitizedHeight. Begin the scan again so all cells match the new layout."
+            } else {
+                state.message
+            }
         )
         persistDraftIfStarted()
     }
@@ -156,12 +183,16 @@ class ScanWorkflowViewModel(
     fun updatePhotoChoice(shouldTakePhoto: Boolean) {
         val state = _uiState.value
         _uiState.value = if (shouldTakePhoto) {
-            state.copy(setup = state.setup.copy(shouldTakePhoto = true))
+            state.copy(
+                setup = state.setup.copy(shouldTakePhoto = true),
+                savedSessionId = null
+            )
         } else {
             state.copy(
                 setup = state.setup.copy(shouldTakePhoto = false),
                 photoUri = null,
-                overlayArea = PhotoOverlayArea.FullFrame
+                overlayArea = PhotoOverlayArea.FullFrame,
+                savedSessionId = null
             )
         }
         persistDraftIfStarted()
@@ -216,7 +247,9 @@ class ScanWorkflowViewModel(
     }
 
     fun updateOverlayArea(area: PhotoOverlayArea) {
-        _uiState.value = _uiState.value.copy(overlayArea = area)
+        val state = _uiState.value
+        if (state.overlayArea == area) return
+        _uiState.value = state.copy(overlayArea = area, savedSessionId = null)
         persistDraftIfStarted()
     }
 
@@ -225,7 +258,8 @@ class ScanWorkflowViewModel(
         _uiState.value = state.copy(
             photoUri = uri,
             overlayArea = PhotoOverlayArea.FullFrame,
-            setup = state.setup.copy(shouldTakePhoto = uri != null)
+            setup = state.setup.copy(shouldTakePhoto = uri != null),
+            savedSessionId = null
         )
         persistDraftIfStarted()
     }
@@ -250,6 +284,7 @@ class ScanWorkflowViewModel(
                         photoUri = importedUri,
                         overlayArea = PhotoOverlayArea.FullFrame,
                         setup = _uiState.value.setup.copy(shouldTakePhoto = true),
+                        savedSessionId = null,
                         message = "Imported reference photo."
                     )
                     persistDraftIfStarted()
@@ -286,11 +321,20 @@ class ScanWorkflowViewModel(
             val baseline = calibrator.calculate(samples, System.currentTimeMillis())
             processor.reset()
             captureProcessor.reset()
-            _uiState.value = _uiState.value.copy(
-                baseline = baseline ?: _uiState.value.baseline,
+            val current = _uiState.value
+            val shouldResetStartedScan = baseline != null && current.isScanStarted
+            _uiState.value = current.copy(
+                currentSessionId = if (shouldResetStartedScan) UUID.randomUUID().toString() else current.currentSessionId,
+                baseline = baseline ?: current.baseline,
                 isCalibrating = false,
+                isScanStarted = if (shouldResetStartedScan) false else current.isScanStarted,
+                cells = if (shouldResetStartedScan) emptyList() else current.cells,
+                heatmap = if (shouldResetStartedScan) null else current.heatmap,
+                savedSessionId = if (shouldResetStartedScan) null else current.savedSessionId,
                 message = if (baseline == null) {
                     "Baseline failed. Keep the phone still and try again."
+                } else if (shouldResetStartedScan) {
+                    "Baseline reset: ${"%.1f".format(baseline.magnitudeMean)} µT. Begin the scan again so all cells use the same baseline."
                 } else {
                     "Baseline set: ${"%.1f".format(baseline.magnitudeMean)} µT, noise ${"%.2f".format(baseline.magnitudeStdDev)} µT."
                 }
@@ -308,8 +352,9 @@ class ScanWorkflowViewModel(
     }
 
     fun beginScan(): Boolean {
-        if (_uiState.value.baseline == null) {
-            _uiState.value = _uiState.value.copy(errorMessage = "Set a baseline before scanning.")
+        val state = _uiState.value
+        if (state.baseline == null) {
+            _uiState.value = state.copy(errorMessage = "Set a baseline before scanning.")
             return false
         }
         startSensor()
@@ -317,7 +362,8 @@ class ScanWorkflowViewModel(
             _uiState.value = _uiState.value.copy(errorMessage = noMagnetometerMessage())
             return false
         }
-        _uiState.value = _uiState.value.copy(
+        _uiState.value = state.copy(
+            currentSessionId = if (state.savedSessionId != null) UUID.randomUUID().toString() else state.currentSessionId,
             isScanStarted = true,
             cells = emptyList(),
             heatmap = null,
@@ -567,6 +613,11 @@ class ScanWorkflowViewModel(
             overlayArea = draft.overlayArea,
             isScanStarted = draft.isScanStarted || draft.cells.isNotEmpty(),
             cells = draft.cells,
+            paletteMode = draft.paletteMode,
+            normalizationMode = draft.normalizationMode,
+            opacity = draft.opacity,
+            showGrid = draft.showGrid,
+            showLegend = draft.showLegend,
             message = when {
                 draft.cells.isNotEmpty() -> "Restored partial scan with ${draft.cells.size} captured cells."
                 draft.isScanStarted -> "Restored in-progress scan."
@@ -590,7 +641,12 @@ class ScanWorkflowViewModel(
                 photoUri = state.photoUri,
                 overlayArea = state.overlayArea,
                 isScanStarted = state.isScanStarted,
-                cells = state.cells
+                cells = state.cells,
+                paletteMode = state.paletteMode,
+                normalizationMode = state.normalizationMode,
+                opacity = state.opacity,
+                showGrid = state.showGrid,
+                showLegend = state.showLegend
             )
         )
     }

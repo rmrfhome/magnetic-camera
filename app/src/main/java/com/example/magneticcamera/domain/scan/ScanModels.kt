@@ -89,5 +89,10 @@ data class ScanDraft(
     val photoUri: String?,
     val overlayArea: PhotoOverlayArea,
     val isScanStarted: Boolean,
-    val cells: List<GridCellMeasurement>
+    val cells: List<GridCellMeasurement>,
+    val paletteMode: PaletteMode = PaletteMode.Scientific,
+    val normalizationMode: NormalizationMode = NormalizationMode.AutoLocal,
+    val opacity: Float = 0.72f,
+    val showGrid: Boolean = true,
+    val showLegend: Boolean = true
 )

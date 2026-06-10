@@ -27,6 +27,7 @@ import com.example.magneticcamera.domain.scan.CaptureMode
 import com.example.magneticcamera.domain.scan.GridScanController
 import com.example.magneticcamera.domain.scan.GridCellMeasurement
 import com.example.magneticcamera.domain.scan.NormalizationMode
+import com.example.magneticcamera.domain.scan.PaletteMode
 import com.example.magneticcamera.domain.scan.ScanDraft
 import com.example.magneticcamera.domain.scan.ScanSession
 import com.example.magneticcamera.domain.scan.ScanSetup
@@ -371,7 +372,12 @@ class MagneticCoreTest {
             photoUri = "content://magnetic-camera/photo/session-draft",
             overlayArea = overlayArea,
             isScanStarted = true,
-            cells = listOf(cell("session-draft").copy(row = 2, col = 3))
+            cells = listOf(cell("session-draft").copy(row = 2, col = 3)),
+            paletteMode = PaletteMode.MonochromeGlow,
+            normalizationMode = NormalizationMode.BaselineDeltaFixedScale(50f),
+            opacity = 0.38f,
+            showGrid = false,
+            showLegend = false
         )
 
         val restored = ScanDraftCodec.decode(ScanDraftCodec.encode(draft))
@@ -383,6 +389,11 @@ class MagneticCoreTest {
         assertEquals(draft.overlayArea, restored.overlayArea)
         assertEquals(draft.isScanStarted, restored.isScanStarted)
         assertEquals(draft.cells, restored.cells)
+        assertEquals(draft.paletteMode, restored.paletteMode)
+        assertEquals(draft.normalizationMode, restored.normalizationMode)
+        assertEquals(draft.opacity, restored.opacity, 0.0001f)
+        assertEquals(draft.showGrid, restored.showGrid)
+        assertEquals(draft.showLegend, restored.showLegend)
     }
 
     @Test
@@ -429,6 +440,11 @@ class MagneticCoreTest {
 
         assertEquals(true, restored.isScanStarted)
         assertEquals(5, restored.setup.gridWidth)
+        assertEquals(PaletteMode.Scientific, restored.paletteMode)
+        assertEquals(NormalizationMode.AutoLocal, restored.normalizationMode)
+        assertEquals(0.72f, restored.opacity, 0.0001f)
+        assertTrue(restored.showGrid)
+        assertTrue(restored.showLegend)
         assertEquals(4f, cell.magnitudeMedian, 0.0001f)
         assertEquals(4f, cell.magnitudeMin, 0.0001f)
         assertEquals(4f, cell.magnitudeMax, 0.0001f)
@@ -437,6 +453,53 @@ class MagneticCoreTest {
         assertEquals(6f, cell.vectorDeltaMin, 0.0001f)
         assertEquals(6f, cell.vectorDeltaMax, 0.0001f)
         assertEquals(0f, cell.magnitudeDeltaMean, 0.0001f)
+    }
+
+    @Test
+    fun scanDraftCodecClampsOutOfRangeRestoredUiState() {
+        val draftJson = """
+            {
+              "setup": {
+                "name": "Out of range draft",
+                "gridWidth": 0,
+                "gridHeight": 99,
+                "shouldTakePhoto": true,
+                "captureMode": "Unexpected"
+              },
+              "currentSessionId": "clamped-session",
+              "photoUri": "file:///tmp/reference.jpg",
+              "overlayArea": {
+                "topLeft": { "x": -0.5, "y": -1.0 },
+                "topRight": { "x": 1.5, "y": -0.25 },
+                "bottomRight": { "x": 2.0, "y": 4.0 },
+                "bottomLeft": { "x": -1.0, "y": 1.25 }
+              },
+              "paletteMode": "UnknownPalette",
+              "normalizationMode": {
+                "type": "BaselineDeltaFixedScale",
+                "maxDeltaMicroTesla": -20.0
+              },
+              "opacity": 4.5,
+              "showGrid": false,
+              "showLegend": false,
+              "cells": []
+            }
+        """.trimIndent()
+
+        val restored = ScanDraftCodec.decode(draftJson)
+
+        assertEquals(1, restored.setup.gridWidth)
+        assertEquals(20, restored.setup.gridHeight)
+        assertEquals(CaptureMode.Manual, restored.setup.captureMode)
+        assertEquals(NormalizedPoint(0f, 0f), restored.overlayArea.topLeft)
+        assertEquals(NormalizedPoint(1f, 0f), restored.overlayArea.topRight)
+        assertEquals(NormalizedPoint(1f, 1f), restored.overlayArea.bottomRight)
+        assertEquals(NormalizedPoint(0f, 1f), restored.overlayArea.bottomLeft)
+        assertEquals(PaletteMode.Scientific, restored.paletteMode)
+        assertEquals(NormalizationMode.BaselineDeltaFixedScale(1f), restored.normalizationMode)
+        assertEquals(1f, restored.opacity, 0.0001f)
+        assertFalse(restored.showGrid)
+        assertFalse(restored.showLegend)
     }
 
     @Test

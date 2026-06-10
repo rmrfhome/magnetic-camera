@@ -228,6 +228,8 @@ fun HeatmapResultScreen(
             }
 
             InstrumentPanel(title = "Save and Export") {
+                val isSaved = state.savedSessionId != null
+                StatusText("Saved session", if (isSaved) state.savedSessionId.orEmpty() else "Not saved")
                 Button(
                     modifier = Modifier.fillMaxWidth(),
                     enabled = !state.isSaving,
@@ -236,9 +238,13 @@ fun HeatmapResultScreen(
                     Icon(Icons.Default.Save, contentDescription = null)
                     Text(if (state.isSaving) "Saving..." else "Save PNG, JSON, and CSV")
                 }
-                Button(modifier = Modifier.fillMaxWidth(), onClick = onGallery) {
+                Button(
+                    modifier = Modifier.fillMaxWidth(),
+                    enabled = isSaved && !state.isSaving,
+                    onClick = onGallery
+                ) {
                     Icon(Icons.Default.PhotoLibrary, contentDescription = null)
-                    Text("Open Gallery")
+                    Text(if (isSaved) "Open Gallery" else "Save Before Gallery")
                 }
             }
         }
