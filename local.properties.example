@@ -1,0 +1,3 @@
+# Copy this file to local.properties if Gradle cannot find the Android SDK.
+# Do not commit local.properties; it is intentionally ignored.
+sdk.dir=C\:\\Users\\<you>\\AppData\\Local\\Android\\Sdk
