@@ -4,6 +4,7 @@ import android.hardware.Sensor
 import android.hardware.SensorManager
 import com.example.magneticcamera.core.export.CsvExporter
 import com.example.magneticcamera.core.export.JsonExporter
+import com.example.magneticcamera.core.graphics.BitmapLoader
 import com.example.magneticcamera.core.graphics.HeatmapGenerator
 import com.example.magneticcamera.core.graphics.HeatmapInput
 import com.example.magneticcamera.core.graphics.MonochromeGlowPalette
@@ -409,6 +410,14 @@ class MagneticCoreTest {
         assertTrue(scientific.legend.gradientColors.first() != scientific.legend.gradientColors.last())
         assertTrue(monochrome.legend.gradientColors.first() != monochrome.legend.gradientColors.last())
         assertTrue(scientific.legend.gradientColors != monochrome.legend.gradientColors)
+    }
+
+    @Test
+    fun bitmapLoaderSampleSizeBoundsLargePhotoDecodes() {
+        assertEquals(1, BitmapLoader.calculateInSampleSize(width = 2_048, height = 1_536, maxDimension = 2_048))
+        assertEquals(2, BitmapLoader.calculateInSampleSize(width = 4_000, height = 3_000, maxDimension = 2_048))
+        assertEquals(4, BitmapLoader.calculateInSampleSize(width = 5_000, height = 4_000, maxDimension = 2_048))
+        assertEquals(1, BitmapLoader.calculateInSampleSize(width = 0, height = 0, maxDimension = 2_048))
     }
 
     @Test

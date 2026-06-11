@@ -2,12 +2,12 @@ package com.example.magneticcamera.ui.scan
 
 import android.content.Context
 import android.graphics.Bitmap
-import android.graphics.BitmapFactory
 import android.hardware.SensorManager
 import android.net.Uri
 import android.os.SystemClock
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.magneticcamera.core.graphics.BitmapLoader
 import com.example.magneticcamera.core.graphics.HeatmapGenerator
 import com.example.magneticcamera.core.graphics.HeatmapInput
 import com.example.magneticcamera.core.graphics.MonochromeGlowPalette
@@ -766,11 +766,7 @@ class ScanWorkflowViewModel(
     }
 
     private fun loadBitmap(uriString: String): Bitmap? {
-        return runCatching {
-            appContext.contentResolver.openInputStream(Uri.parse(uriString)).use { input ->
-                if (input == null) null else BitmapFactory.decodeStream(input)
-            }
-        }.getOrNull()
+        return BitmapLoader.decode(appContext, uriString, maxDimension = 2_048)
     }
 
     private fun Throwable.rethrowIfCancellation() {

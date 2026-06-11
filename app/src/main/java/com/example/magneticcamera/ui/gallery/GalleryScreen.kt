@@ -95,7 +95,7 @@ private fun SessionCard(
     session: ScanSessionEntity,
     onClick: () -> Unit
 ) {
-    val thumbnail = rememberBitmap(session.overlayImageUri ?: session.heatmapImageUri)
+    val thumbnail = rememberBitmap(session.overlayImageUri ?: session.heatmapImageUri, maxDimension = 512)
     Surface(
         modifier = Modifier.fillMaxWidth(),
         color = MaterialTheme.colorScheme.surface,

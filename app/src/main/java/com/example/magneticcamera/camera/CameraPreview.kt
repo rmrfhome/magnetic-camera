@@ -7,10 +7,8 @@ import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.camera.view.PreviewView
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.viewinterop.AndroidView
@@ -24,49 +22,61 @@ fun CameraPreview(
 ) {
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
-    var cameraProvider by remember { mutableStateOf<ProcessCameraProvider?>(null) }
+    val currentOnImageCaptureReady = rememberUpdatedState(onImageCaptureReady)
+    val previewView = remember(context) {
+        PreviewView(context).apply {
+            implementationMode = PreviewView.ImplementationMode.COMPATIBLE
+        }
+    }
 
     AndroidView(
         modifier = modifier,
-        factory = { viewContext ->
-            PreviewView(viewContext).apply {
-                implementationMode = PreviewView.ImplementationMode.COMPATIBLE
-            }
-        },
-        update = { previewView ->
-            val providerFuture = ProcessCameraProvider.getInstance(context)
-            providerFuture.addListener(
-                {
-                    val provider = providerFuture.get()
-                    cameraProvider = provider
-                    val preview = Preview.Builder().build().also {
-                        it.setSurfaceProvider(previewView.surfaceProvider)
-                    }
-                    val imageCapture = ImageCapture.Builder()
-                        .setCaptureMode(ImageCapture.CAPTURE_MODE_MINIMIZE_LATENCY)
-                        .build()
-                    runCatching {
-                        provider.unbindAll()
-                        provider.bindToLifecycle(
-                            lifecycleOwner,
-                            CameraSelector.DEFAULT_BACK_CAMERA,
-                            preview,
-                            imageCapture
-                        )
-                        onImageCaptureReady(imageCapture)
-                    }.onFailure {
-                        onImageCaptureReady(null)
-                    }
-                },
-                ContextCompat.getMainExecutor(context)
-            )
-        }
+        factory = { previewView }
     )
 
-    DisposableEffect(Unit) {
+    DisposableEffect(context, lifecycleOwner, previewView) {
+        val providerFuture = ProcessCameraProvider.getInstance(context)
+        val executor = ContextCompat.getMainExecutor(context)
+        var disposed = false
+        var boundProvider: ProcessCameraProvider? = null
+
+        providerFuture.addListener(
+            {
+                val provider = runCatching { providerFuture.get() }
+                    .onFailure { currentOnImageCaptureReady.value(null) }
+                    .getOrNull() ?: return@addListener
+                if (disposed) {
+                    return@addListener
+                }
+
+                val preview = Preview.Builder().build().also {
+                    it.setSurfaceProvider(previewView.surfaceProvider)
+                }
+                val imageCapture = ImageCapture.Builder()
+                    .setCaptureMode(ImageCapture.CAPTURE_MODE_MINIMIZE_LATENCY)
+                    .build()
+                runCatching {
+                    provider.unbindAll()
+                    provider.bindToLifecycle(
+                        lifecycleOwner,
+                        CameraSelector.DEFAULT_BACK_CAMERA,
+                        preview,
+                        imageCapture
+                    )
+                    boundProvider = provider
+                    currentOnImageCaptureReady.value(imageCapture)
+                }.onFailure {
+                    boundProvider = provider
+                    currentOnImageCaptureReady.value(null)
+                }
+            },
+            executor
+        )
+
         onDispose {
-            cameraProvider?.unbindAll()
-            onImageCaptureReady(null)
+            disposed = true
+            boundProvider?.unbindAll()
+            currentOnImageCaptureReady.value(null)
         }
     }
 }

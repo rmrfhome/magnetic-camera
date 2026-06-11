@@ -1,8 +1,6 @@
 package com.example.magneticcamera.ui.common
 
 import android.graphics.Bitmap
-import android.graphics.BitmapFactory
-import android.net.Uri
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.gestures.detectDragGestures
@@ -10,10 +8,12 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
@@ -27,9 +27,12 @@ import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
+import com.example.magneticcamera.core.graphics.BitmapLoader
 import com.example.magneticcamera.domain.model.NormalizedPoint
 import com.example.magneticcamera.domain.model.PhotoOverlayArea
 import kotlin.math.hypot
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 @Composable
 fun PhotoAreaSelector(
@@ -38,7 +41,9 @@ fun PhotoAreaSelector(
     onAreaChange: (PhotoOverlayArea) -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val bitmap = rememberBitmap(photoUri)
+    val bitmap = rememberBitmap(photoUri, maxDimension = 1_600)
+    val currentArea by rememberUpdatedState(area)
+    val currentOnAreaChange by rememberUpdatedState(onAreaChange)
     var size by remember { mutableStateOf(IntSize.Zero) }
     var activeCorner by remember { mutableIntStateOf(-1) }
 
@@ -47,10 +52,10 @@ fun PhotoAreaSelector(
             .fillMaxWidth()
             .aspectRatio(4f / 3f)
             .onSizeChanged { size = it }
-            .pointerInput(area, size) {
+            .pointerInput(size) {
                 detectDragGestures(
                     onDragStart = { start ->
-                        activeCorner = nearestCorner(start, area, size)
+                        activeCorner = nearestCorner(start, currentArea, size)
                     },
                     onDragEnd = { activeCorner = -1 },
                     onDragCancel = { activeCorner = -1 },
@@ -61,7 +66,7 @@ fun PhotoAreaSelector(
                             x = (change.position.x / size.width).coerceIn(0f, 1f),
                             y = (change.position.y / size.height).coerceIn(0f, 1f)
                         )
-                        onAreaChange(area.withCorner(corner, point))
+                        currentOnAreaChange(currentArea.withCorner(corner, point))
                     }
                 )
             }
@@ -97,19 +102,23 @@ fun PhotoAreaSelector(
 }
 
 @Composable
-fun rememberBitmap(uriString: String?): Bitmap? {
-    val context = LocalContext.current
-    return remember(uriString) {
-        if (uriString == null) {
+fun rememberBitmap(
+    uriString: String?,
+    maxDimension: Int = 2_048
+): Bitmap? {
+    val context = LocalContext.current.applicationContext
+    var bitmap by remember(context, uriString, maxDimension) { mutableStateOf<Bitmap?>(null) }
+
+    LaunchedEffect(context, uriString, maxDimension) {
+        bitmap = if (uriString == null) {
             null
         } else {
-            runCatching {
-                context.contentResolver.openInputStream(Uri.parse(uriString)).use { input ->
-                    if (input == null) null else BitmapFactory.decodeStream(input)
-                }
-            }.getOrNull()
+            withContext(Dispatchers.IO) {
+                BitmapLoader.decode(context, uriString, maxDimension)
+            }
         }
     }
+    return bitmap
 }
 
 private fun PhotoOverlayArea.points(): List<NormalizedPoint> {
