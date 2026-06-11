@@ -6,10 +6,13 @@ import com.example.magneticcamera.core.export.CsvExporter
 import com.example.magneticcamera.core.export.JsonExporter
 import com.example.magneticcamera.core.graphics.HeatmapGenerator
 import com.example.magneticcamera.core.graphics.HeatmapInput
+import com.example.magneticcamera.core.graphics.MonochromeGlowPalette
+import com.example.magneticcamera.core.graphics.ScientificHeatmapPalette
 import com.example.magneticcamera.core.math.LowPassFilter
 import com.example.magneticcamera.core.math.MagneticMath
 import com.example.magneticcamera.core.math.MedianFilter
 import com.example.magneticcamera.core.sensors.FakeMagneticSensorReader
+import com.example.magneticcamera.core.sensors.MagneticSensorDiagnostics
 import com.example.magneticcamera.core.sensors.MagneticSample
 import com.example.magneticcamera.core.sensors.MagneticSampleValidator
 import com.example.magneticcamera.core.sensors.MagneticSensorInfo
@@ -31,10 +34,17 @@ import com.example.magneticcamera.domain.scan.PaletteMode
 import com.example.magneticcamera.domain.scan.ScanDraft
 import com.example.magneticcamera.domain.scan.ScanSession
 import com.example.magneticcamera.domain.scan.ScanSetup
+import com.example.magneticcamera.ui.live.LiveMeterViewModel
 import com.example.magneticcamera.ui.scan.ScanUiState
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlin.math.sqrt
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.test.UnconfinedTestDispatcher
+import kotlinx.coroutines.test.resetMain
+import kotlinx.coroutines.test.runTest
+import kotlinx.coroutines.test.setMain
 import kotlinx.coroutines.withTimeoutOrNull
 import org.json.JSONObject
 import org.junit.Assert.assertEquals
@@ -123,6 +133,43 @@ class MagneticCoreTest {
             assertEquals(SensorManager.SENSOR_STATUS_UNRELIABLE, sample.accuracy)
         } finally {
             unreliable.stop()
+        }
+    }
+
+    @Test
+    fun fakeSensorReportsStartFailureWithoutEmittingSamples() = runBlocking {
+        val reader = FakeMagneticSensorReader(startFails = true)
+
+        reader.start()
+
+        assertEquals(false, reader.sensorInfo.value?.isAvailable)
+        assertEquals(
+            MagneticSensorDiagnostics.SENSOR_START_FAILED_WARNING,
+            reader.diagnosticMessage.value
+        )
+        assertNull(withTimeoutOrNull(80L) { reader.samples.first() })
+    }
+
+    @OptIn(ExperimentalCoroutinesApi::class)
+    @Test
+    fun liveMeterShowsSensorStartFailureDiagnostic() = runTest {
+        Dispatchers.setMain(UnconfinedTestDispatcher(testScheduler))
+        try {
+            val reader = FakeMagneticSensorReader(startFails = true)
+            val viewModel = LiveMeterViewModel(
+                sensorReader = reader,
+                elapsedRealtimeMillis = { testScheduler.currentTime }
+            )
+
+            viewModel.start()
+
+            assertEquals(false, viewModel.uiState.value.sensorAvailable)
+            assertEquals(
+                MagneticSensorDiagnostics.SENSOR_START_FAILED_WARNING,
+                viewModel.uiState.value.errorMessage
+            )
+        } finally {
+            Dispatchers.resetMain()
         }
     }
 
@@ -340,6 +387,31 @@ class MagneticCoreTest {
     }
 
     @Test
+    fun heatmapLegendCarriesSelectedPaletteGradientForPngExports() {
+        val generator = HeatmapGenerator()
+        val input = HeatmapInput(gridWidth = 2, gridHeight = 2, values = listOf(0f, 10f, 20f, 30f))
+
+        val scientific = generator.generate(
+            input = input,
+            outputWidth = 4,
+            outputHeight = 4,
+            palette = ScientificHeatmapPalette
+        )
+        val monochrome = generator.generate(
+            input = input,
+            outputWidth = 4,
+            outputHeight = 4,
+            palette = MonochromeGlowPalette
+        )
+
+        assertEquals(160, scientific.legend.gradientColors.size)
+        assertEquals(160, monochrome.legend.gradientColors.size)
+        assertTrue(scientific.legend.gradientColors.first() != scientific.legend.gradientColors.last())
+        assertTrue(monochrome.legend.gradientColors.first() != monochrome.legend.gradientColors.last())
+        assertTrue(scientific.legend.gradientColors != monochrome.legend.gradientColors)
+    }
+
+    @Test
     fun scanDraftCodecRoundTripsInterruptedScanState() {
         val baseline = MagneticBaseline(
             createdAtMillis = 123L,
@@ -534,6 +606,68 @@ class MagneticCoreTest {
     }
 
     @Test
+    fun scanDraftCodecSanitizesCorruptedOverlayPointsAndCellCounters() {
+        val draftJson = """
+            {
+              "setup": {
+                "name": "Corrupted interrupted scan",
+                "gridWidth": 5,
+                "gridHeight": 5,
+                "shouldTakePhoto": true,
+                "captureMode": "Manual"
+              },
+              "currentSessionId": "corrupted-session",
+              "photoUri": "file:///tmp/reference.jpg",
+              "overlayArea": {
+                "topLeft": { "x": 1e999, "y": -1e999 },
+                "topRight": { "x": 1.25, "y": -0.25 },
+                "bottomRight": { "x": 0.75, "y": 0.8 },
+                "bottomLeft": { "x": 0.1, "y": 0.9 }
+              },
+              "isScanStarted": true,
+              "cells": [
+                {
+                  "id": "corrupted-cell",
+                  "sessionId": "corrupted-session",
+                  "row": -2,
+                  "col": -3,
+                  "sampleCount": -10,
+                  "capturedAtMillis": -42,
+                  "xMean": 1.0,
+                  "yMean": 2.0,
+                  "zMean": 3.0,
+                  "magnitudeMean": 4.0,
+                  "magnitudeMedian": 4.0,
+                  "magnitudeMin": 3.0,
+                  "magnitudeMax": 5.0,
+                  "magnitudeStdDev": -0.5,
+                  "vectorDeltaMean": 6.0,
+                  "vectorDeltaMedian": 6.0,
+                  "vectorDeltaMin": 5.0,
+                  "vectorDeltaMax": 7.0,
+                  "vectorDeltaStdDev": -0.7,
+                  "magnitudeDeltaMean": 2.0,
+                  "accuracy": -1
+                }
+              ]
+            }
+        """.trimIndent()
+
+        val restored = ScanDraftCodec.decode(draftJson)
+        val cell = restored.cells.single()
+
+        assertEquals(NormalizedPoint(0f, 0f), restored.overlayArea.topLeft)
+        assertEquals(NormalizedPoint(1f, 0f), restored.overlayArea.topRight)
+        assertEquals(0, cell.row)
+        assertEquals(0, cell.col)
+        assertEquals(0, cell.sampleCount)
+        assertEquals(0L, cell.capturedAtMillis)
+        assertEquals(0f, cell.magnitudeStdDev, 0.0001f)
+        assertEquals(0f, cell.vectorDeltaStdDev, 0.0001f)
+        assertEquals(0, cell.accuracy)
+    }
+
+    @Test
     fun jsonExporterContainsRequiredSchemaFieldsAndCells() {
         val baseline = MagneticBaseline(
             createdAtMillis = 1L,
@@ -576,20 +710,23 @@ class MagneticCoreTest {
             androidVersion = "15",
             sensorInfo = sensorInfo
         )
+        val parsed = JSONObject(json)
+        val parsedSession = parsed.getJSONObject("session")
+        val parsedCell = parsed.getJSONArray("cells").getJSONObject(0)
 
-        assertTrue(json.contains("\"app\": \"Magnetic Camera\""))
-        assertTrue(json.contains("\"schemaVersion\": 1"))
-        assertTrue(json.contains("\"id\": \"scan-1\""))
-        assertTrue(json.contains("\"sessionId\": \"scan-1\""))
-        assertTrue(json.contains("\"type\": ${Sensor.TYPE_MAGNETIC_FIELD_UNCALIBRATED}"))
-        assertTrue(json.contains("\"width\": 1"))
-        assertTrue(json.contains("\"row\": 0"))
-        assertTrue(json.contains("\"sampleCount\": 12"))
-        assertTrue(json.contains("\"magnitudeMedian\": 4.0"))
-        assertTrue(json.contains("\"magnitudeStdDev\": 0.5"))
-        assertTrue(json.contains("\"vectorDeltaMax\": 7.0"))
-        assertTrue(json.contains("\"vectorDeltaStdDev\": 0.7"))
-        assertTrue(json.contains("\"accuracy\": ${SensorManager.SENSOR_STATUS_ACCURACY_HIGH}"))
+        assertEquals("Magnetic Camera", parsed.getString("app"))
+        assertEquals(1, parsed.getInt("schemaVersion"))
+        assertEquals("scan-1", parsedSession.getString("id"))
+        assertEquals("scan-1", parsedCell.getString("sessionId"))
+        assertEquals(Sensor.TYPE_MAGNETIC_FIELD_UNCALIBRATED, parsedSession.getJSONObject("sensor").getInt("type"))
+        assertEquals(1, parsedSession.getJSONObject("grid").getInt("width"))
+        assertEquals(0, parsedCell.getInt("row"))
+        assertEquals(12, parsedCell.getInt("sampleCount"))
+        assertEquals(4.0, parsedCell.getDouble("magnitudeMedian"), 0.0001)
+        assertEquals(0.5, parsedCell.getDouble("magnitudeStdDev"), 0.0001)
+        assertEquals(7.0, parsedCell.getDouble("vectorDeltaMax"), 0.0001)
+        assertEquals(0.7, parsedCell.getDouble("vectorDeltaStdDev"), 0.0001)
+        assertEquals(SensorManager.SENSOR_STATUS_ACCURACY_HIGH, parsedCell.getInt("accuracy"))
     }
 
     @Test
@@ -647,6 +784,44 @@ class MagneticCoreTest {
     }
 
     @Test
+    fun jsonExporterProducesValidJsonForControlCharacters() {
+        val baseline = MagneticBaseline(
+            createdAtMillis = 1L,
+            sampleCount = 4,
+            xMean = 1f,
+            yMean = 2f,
+            zMean = 3f,
+            magnitudeMean = 4f,
+            xStdDev = 0.1f,
+            yStdDev = 0.2f,
+            zStdDev = 0.3f,
+            magnitudeStdDev = 0.4f
+        )
+        val session = ScanSession(
+            id = "scan-1",
+            name = "Control\u0001scan\b",
+            createdAtMillis = 1_700_000_000_000L,
+            gridWidth = 1,
+            gridHeight = 1,
+            baseline = baseline,
+            photoUri = null,
+            cells = listOf(cell("scan-1").copy(id = "cell\u0002one"))
+        )
+
+        val json = JsonExporter().export(
+            session = session,
+            deviceManufacturer = "Google",
+            deviceModel = "Pixel 8",
+            androidVersion = "15",
+            sensorInfo = null
+        )
+        val parsed = JSONObject(json)
+
+        assertEquals("Control\u0001scan\b", parsed.getJSONObject("session").getString("name"))
+        assertEquals("cell\u0002one", parsed.getJSONArray("cells").getJSONObject(0).getString("id"))
+    }
+
+    @Test
     fun csvExporterContainsRequiredColumnsAndCells() {
         val baseline = MagneticBaseline(
             createdAtMillis = 1L,
@@ -678,6 +853,37 @@ class MagneticCoreTest {
             csv.first()
         )
         assertEquals("scan-1,cell-1,0,0,12,2,1.0,2.0,3.0,4.0,4.0,3.0,5.0,0.5,2.0,6.0,6.0,5.0,7.0,0.7,3", csv[1])
+    }
+
+    @Test
+    fun csvExporterQuotesTextFieldsWithCommasQuotesAndLineBreaks() {
+        val baseline = MagneticBaseline(
+            createdAtMillis = 1L,
+            sampleCount = 4,
+            xMean = 1f,
+            yMean = 2f,
+            zMean = 3f,
+            magnitudeMean = 4f,
+            xStdDev = 0.1f,
+            yStdDev = 0.2f,
+            zStdDev = 0.3f,
+            magnitudeStdDev = 0.4f
+        )
+        val session = ScanSession(
+            id = "scan,\"A\"\rnext",
+            name = "Test scan",
+            createdAtMillis = 1_700_000_000_000L,
+            gridWidth = 1,
+            gridHeight = 1,
+            baseline = baseline,
+            photoUri = null,
+            cells = listOf(cell("scan,\"A\"\rnext").copy(id = "cell\n1"))
+        )
+
+        val csv = CsvExporter().export(session)
+
+        assertTrue(csv.contains("\"scan,\"\"A\"\"\rnext\""))
+        assertTrue(csv.contains("\"cell\n1\""))
     }
 
     @Test

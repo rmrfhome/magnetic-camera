@@ -51,7 +51,7 @@ class CsvExporter {
     }
 
     private fun escapeCsv(value: String): String {
-        return if (value.any { it == ',' || it == '"' || it == '\n' }) {
+        return if (value.any { it == ',' || it == '"' || it == '\n' || it == '\r' }) {
             "\"" + value.replace("\"", "\"\"") + "\""
         } else {
             value

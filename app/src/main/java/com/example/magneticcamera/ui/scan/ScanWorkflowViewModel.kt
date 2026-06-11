@@ -94,7 +94,7 @@ class ScanWorkflowViewModel(
         val sensorAvailable = sensorReader.sensorInfo.value?.isAvailable != false
         _uiState.value = _uiState.value.copy(
             isSensorActive = sensorAvailable,
-            errorMessage = if (sensorAvailable) _uiState.value.errorMessage else noMagnetometerMessage()
+            errorMessage = if (sensorAvailable) _uiState.value.errorMessage else sensorUnavailableMessage()
         )
         if (!sensorAvailable) return
         sensorJob = viewModelScope.launch {
@@ -308,7 +308,7 @@ class ScanWorkflowViewModel(
             if (sensorReader.sensorInfo.value?.isAvailable == false) {
                 _uiState.value = _uiState.value.copy(
                     isCalibrating = false,
-                    errorMessage = noMagnetometerMessage()
+                    errorMessage = sensorUnavailableMessage()
                 )
                 return@launch
             }
@@ -358,7 +358,7 @@ class ScanWorkflowViewModel(
         startSensor()
         val state = _uiState.value
         if (sensorReader.sensorInfo.value?.isAvailable == false) {
-            _uiState.value = state.copy(errorMessage = noMagnetometerMessage())
+            _uiState.value = state.copy(errorMessage = sensorUnavailableMessage())
             return false
         }
         _uiState.value = state.copy(
@@ -426,7 +426,7 @@ class ScanWorkflowViewModel(
                 if (_uiState.value.currentSessionId == sessionId) {
                     _uiState.value = _uiState.value.copy(
                         isCapturing = false,
-                        errorMessage = noMagnetometerMessage()
+                        errorMessage = sensorUnavailableMessage()
                     )
                 }
                 return@launch
@@ -727,6 +727,10 @@ class ScanWorkflowViewModel(
 
     private fun noMagnetometerMessage(): String {
         return "This device does not expose a magnetic field sensor. Magnetic Camera cannot scan magnetic fields on this device."
+    }
+
+    private fun sensorUnavailableMessage(): String {
+        return sensorReader.diagnosticMessage.value ?: activeDiagnosticMessage() ?: noMagnetometerMessage()
     }
 
     private fun unreliableAccuracyMessage(accuracy: Int): String? {

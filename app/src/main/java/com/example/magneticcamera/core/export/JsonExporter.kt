@@ -3,6 +3,8 @@ package com.example.magneticcamera.core.export
 import com.example.magneticcamera.core.sensors.MagneticSensorInfo
 import com.example.magneticcamera.domain.scan.ScanSession
 import java.time.Instant
+import org.json.JSONArray
+import org.json.JSONObject
 
 class JsonExporter {
     fun export(
@@ -15,86 +17,90 @@ class JsonExporter {
         val sensorType = sensorInfo?.sensorType ?: -1
         val sensorName = sensorInfo?.name.orEmpty()
         val sensorVendor = sensorInfo?.vendor.orEmpty()
-        val cells = session.cells.sortedWith(compareBy({ it.row }, { it.col })).joinToString(",\n") { cell ->
-            """
-            |    {
-            |      "id": "${cell.id.escapeJson()}",
-            |      "sessionId": "${cell.sessionId.escapeJson()}",
-            |      "row": ${cell.row},
-            |      "col": ${cell.col},
-            |      "sampleCount": ${cell.sampleCount},
-            |      "capturedAtMillis": ${cell.capturedAtMillis},
-            |      "xMean": ${cell.xMean.jsonNumber()},
-            |      "yMean": ${cell.yMean.jsonNumber()},
-            |      "zMean": ${cell.zMean.jsonNumber()},
-            |      "magnitudeMean": ${cell.magnitudeMean.jsonNumber()},
-            |      "magnitudeMedian": ${cell.magnitudeMedian.jsonNumber()},
-            |      "magnitudeMin": ${cell.magnitudeMin.jsonNumber()},
-            |      "magnitudeMax": ${cell.magnitudeMax.jsonNumber()},
-            |      "magnitudeStdDev": ${cell.magnitudeStdDev.jsonNumber()},
-            |      "magnitudeDeltaMean": ${cell.magnitudeDeltaMean.jsonNumber()},
-            |      "vectorDeltaMean": ${cell.vectorDeltaMean.jsonNumber()},
-            |      "vectorDeltaMedian": ${cell.vectorDeltaMedian.jsonNumber()},
-            |      "vectorDeltaMin": ${cell.vectorDeltaMin.jsonNumber()},
-            |      "vectorDeltaMax": ${cell.vectorDeltaMax.jsonNumber()},
-            |      "vectorDeltaStdDev": ${cell.vectorDeltaStdDev.jsonNumber()},
-            |      "accuracy": ${cell.accuracy}
-            |    }
-            """.trimMargin()
-        }
 
-        return """
-            |{
-            |  "app": "Magnetic Camera",
-            |  "schemaVersion": 1,
-            |  "session": {
-            |    "id": "${session.id.escapeJson()}",
-            |    "name": "${session.name.escapeJson()}",
-            |    "createdAt": "${Instant.ofEpochMilli(session.createdAtMillis)}",
-            |    "device": {
-            |      "manufacturer": "${deviceManufacturer.escapeJson()}",
-            |      "model": "${deviceModel.escapeJson()}",
-            |      "androidVersion": "${androidVersion.escapeJson()}"
-            |    },
-            |    "sensor": {
-            |      "type": $sensorType,
-            |      "name": "${sensorName.escapeJson()}",
-            |      "vendor": "${sensorVendor.escapeJson()}"
-            |    },
-            |    "baseline": {
-            |      "x": ${session.baseline.xMean.jsonNumber()},
-            |      "y": ${session.baseline.yMean.jsonNumber()},
-            |      "z": ${session.baseline.zMean.jsonNumber()},
-            |      "magnitude": ${session.baseline.magnitudeMean.jsonNumber()}
-            |    },
-            |    "grid": {
-            |      "width": ${session.gridWidth},
-            |      "height": ${session.gridHeight}
-            |    }
-            |  },
-            |  "cells": [
-            |$cells
-            |  ]
-            |}
-        """.trimMargin()
+        val root = JSONObject()
+            .put("app", "Magnetic Camera")
+            .put("schemaVersion", 1)
+            .put("session", session.toJson(deviceManufacturer, deviceModel, androidVersion, sensorType, sensorName, sensorVendor))
+            .put("cells", session.cellsToJson())
+
+        return root.toString(2)
     }
 
-    private fun String.escapeJson(): String {
-        return buildString {
-            for (char in this@escapeJson) {
-                when (char) {
-                    '\\' -> append("\\\\")
-                    '"' -> append("\\\"")
-                    '\n' -> append("\\n")
-                    '\r' -> append("\\r")
-                    '\t' -> append("\\t")
-                    else -> append(char)
-                }
+    private fun ScanSession.toJson(
+        deviceManufacturer: String,
+        deviceModel: String,
+        androidVersion: String,
+        sensorType: Int,
+        sensorName: String,
+        sensorVendor: String
+    ): JSONObject {
+        return JSONObject()
+            .put("id", id)
+            .put("name", name)
+            .put("createdAt", Instant.ofEpochMilli(createdAtMillis).toString())
+            .put(
+                "device",
+                JSONObject()
+                    .put("manufacturer", deviceManufacturer)
+                    .put("model", deviceModel)
+                    .put("androidVersion", androidVersion)
+            )
+            .put(
+                "sensor",
+                JSONObject()
+                    .put("type", sensorType)
+                    .put("name", sensorName)
+                    .put("vendor", sensorVendor)
+            )
+            .put(
+                "baseline",
+                JSONObject()
+                    .put("x", baseline.xMean.jsonNumber())
+                    .put("y", baseline.yMean.jsonNumber())
+                    .put("z", baseline.zMean.jsonNumber())
+                    .put("magnitude", baseline.magnitudeMean.jsonNumber())
+            )
+            .put(
+                "grid",
+                JSONObject()
+                    .put("width", gridWidth)
+                    .put("height", gridHeight)
+            )
+    }
+
+    private fun ScanSession.cellsToJson(): JSONArray {
+        return JSONArray().also { array ->
+            cells.sortedWith(compareBy({ it.row }, { it.col })).forEach { cell ->
+                array.put(
+                    JSONObject()
+                        .put("id", cell.id)
+                        .put("sessionId", cell.sessionId)
+                        .put("row", cell.row)
+                        .put("col", cell.col)
+                        .put("sampleCount", cell.sampleCount)
+                        .put("capturedAtMillis", cell.capturedAtMillis)
+                        .put("xMean", cell.xMean.jsonNumber())
+                        .put("yMean", cell.yMean.jsonNumber())
+                        .put("zMean", cell.zMean.jsonNumber())
+                        .put("magnitudeMean", cell.magnitudeMean.jsonNumber())
+                        .put("magnitudeMedian", cell.magnitudeMedian.jsonNumber())
+                        .put("magnitudeMin", cell.magnitudeMin.jsonNumber())
+                        .put("magnitudeMax", cell.magnitudeMax.jsonNumber())
+                        .put("magnitudeStdDev", cell.magnitudeStdDev.jsonNumber())
+                        .put("magnitudeDeltaMean", cell.magnitudeDeltaMean.jsonNumber())
+                        .put("vectorDeltaMean", cell.vectorDeltaMean.jsonNumber())
+                        .put("vectorDeltaMedian", cell.vectorDeltaMedian.jsonNumber())
+                        .put("vectorDeltaMin", cell.vectorDeltaMin.jsonNumber())
+                        .put("vectorDeltaMax", cell.vectorDeltaMax.jsonNumber())
+                        .put("vectorDeltaStdDev", cell.vectorDeltaStdDev.jsonNumber())
+                        .put("accuracy", cell.accuracy)
+                )
             }
         }
     }
 
-    private fun Float.jsonNumber(): String {
-        return if (isFinite()) toString() else "0.0"
+    private fun Float.jsonNumber(): Double {
+        return if (isFinite()) toDouble() else 0.0
     }
 }

@@ -18,7 +18,8 @@ data class HeatmapLegend(
     val minValue: Float,
     val maxValue: Float,
     val unit: String,
-    val metricName: String
+    val metricName: String,
+    val gradientColors: List<Int> = emptyList()
 )
 
 data class HeatmapRender(
@@ -96,7 +97,8 @@ class HeatmapGenerator {
                 minValue = range.first,
                 maxValue = range.second,
                 unit = input.unit,
-                metricName = input.metric.label
+                metricName = input.metric.label,
+                gradientColors = palette.gradientColors()
             )
         )
     }
@@ -156,5 +158,12 @@ class HeatmapGenerator {
 
     private fun lerp(start: Float, end: Float, t: Float): Float {
         return start + (end - start) * t
+    }
+
+    private fun HeatmapPalette.gradientColors(segments: Int = 160): List<Int> {
+        return (0 until segments).map { index ->
+            val fraction = index / (segments - 1).toFloat()
+            colorFor(fraction).toArgb()
+        }
     }
 }

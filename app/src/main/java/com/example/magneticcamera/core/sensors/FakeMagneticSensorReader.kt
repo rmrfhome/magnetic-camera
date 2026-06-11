@@ -19,6 +19,7 @@ import kotlinx.coroutines.launch
 
 class FakeMagneticSensorReader(
     private val available: Boolean = true,
+    private val startFails: Boolean = false,
     private val unreliableAccuracy: Boolean = false,
     private val baselineX: Float = 18f,
     private val baselineY: Float = -4f,
@@ -63,9 +64,17 @@ class FakeMagneticSensorReader(
 
     override fun start(config: SensorReadConfig) {
         if (!available) return
+        if (startFails) {
+            stop()
+            _sensorInfo.value = _sensorInfo.value.copy(isAvailable = false)
+            _latestAccuracy.value = SensorManager.SENSOR_STATUS_UNRELIABLE
+            _diagnosticMessage.value = MagneticSensorDiagnostics.SENSOR_START_FAILED_WARNING
+            return
+        }
         if (job?.isActive == true && activeSamplingMode == config.samplingMode) return
         stop()
         activeSamplingMode = config.samplingMode
+        _diagnosticMessage.value = null
         job = scope.launch {
             var tick = 0
             val delayMillis = when (config.samplingMode) {

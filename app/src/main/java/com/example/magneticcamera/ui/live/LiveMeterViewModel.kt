@@ -21,7 +21,8 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
 
 class LiveMeterViewModel(
-    private val sensorReader: MagneticSensorReader
+    private val sensorReader: MagneticSensorReader,
+    private val elapsedRealtimeMillis: () -> Long = { SystemClock.elapsedRealtime() }
 ) : ViewModel() {
     private val processor = MagneticSampleProcessor()
     private val calibrator = BaselineCalibrator()
@@ -46,7 +47,7 @@ class LiveMeterViewModel(
                     sensorInfo = info,
                     sensorAvailable = info?.isAvailable != false,
                     errorMessage = if (info?.isAvailable == false) {
-                        "This device does not expose a magnetic field sensor. Magnetic Camera cannot scan magnetic fields on this device."
+                        sensorUnavailableMessage()
                     } else {
                         _uiState.value.errorMessage
                     }
@@ -57,7 +58,7 @@ class LiveMeterViewModel(
             sensorReader.diagnosticMessage.collect { message ->
                 if (message != null) {
                     diagnosticMessage = message
-                    diagnosticExpiresAtMillis = SystemClock.elapsedRealtime() + DIAGNOSTIC_MESSAGE_DURATION_MS
+                    diagnosticExpiresAtMillis = elapsedRealtimeMillis() + DIAGNOSTIC_MESSAGE_DURATION_MS
                     _uiState.value = _uiState.value.copy(errorMessage = message)
                 }
             }
@@ -67,6 +68,13 @@ class LiveMeterViewModel(
     fun start() {
         if (sampleJob?.isActive == true) return
         sensorReader.start(SensorReadConfig(samplingMode))
+        if (sensorReader.sensorInfo.value?.isAvailable == false) {
+            _uiState.value = _uiState.value.copy(
+                sensorAvailable = false,
+                errorMessage = sensorUnavailableMessage()
+            )
+            return
+        }
         sampleJob = viewModelScope.launch {
             sensorReader.samples.collect { raw ->
                 val processed = processor.process(raw, _uiState.value.baseline)
@@ -129,7 +137,7 @@ class LiveMeterViewModel(
             if (sensorReader.sensorInfo.value?.isAvailable == false) {
                 _uiState.value = _uiState.value.copy(
                     isCalibrating = false,
-                    errorMessage = noMagnetometerMessage()
+                    errorMessage = sensorUnavailableMessage()
                 )
                 return@launch
             }
@@ -161,12 +169,12 @@ class LiveMeterViewModel(
 
     private suspend fun collectBaselineSamples(): List<MagneticSample> {
         sensorReader.start(SensorReadConfig(samplingMode))
-        val startedAt = SystemClock.elapsedRealtime()
+        val startedAt = elapsedRealtimeMillis()
         val samples = mutableListOf<MagneticSample>()
         withTimeoutOrNull(2_300L) {
-            while (SystemClock.elapsedRealtime() - startedAt < 2_200L) {
+            while (elapsedRealtimeMillis() - startedAt < 2_200L) {
                 val sample = sensorReader.samples.first()
-                if (SystemClock.elapsedRealtime() - startedAt >= 200L) {
+                if (elapsedRealtimeMillis() - startedAt >= 200L) {
                     samples.add(sample)
                 }
             }
@@ -220,13 +228,17 @@ class LiveMeterViewModel(
 
     private fun activeDiagnosticMessage(): String? {
         if (diagnosticMessage == null) return null
-        if (SystemClock.elapsedRealtime() <= diagnosticExpiresAtMillis) return diagnosticMessage
+        if (elapsedRealtimeMillis() <= diagnosticExpiresAtMillis) return diagnosticMessage
         diagnosticMessage = null
         return null
     }
 
     private fun noMagnetometerMessage(): String {
         return "This device does not expose a magnetic field sensor. Magnetic Camera cannot scan magnetic fields on this device."
+    }
+
+    private fun sensorUnavailableMessage(): String {
+        return sensorReader.diagnosticMessage.value ?: activeDiagnosticMessage() ?: noMagnetometerMessage()
     }
 
     private companion object {

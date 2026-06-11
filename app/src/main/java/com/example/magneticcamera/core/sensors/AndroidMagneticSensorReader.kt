@@ -45,9 +45,16 @@ class AndroidMagneticSensorReader(
 
         if (activeSensor == sensor && activeSensorDelay == config.sensorDelay) return
         stop()
+        val registered = sensorManager.registerListener(this, sensor, config.sensorDelay)
+        if (!registered) {
+            _sensorInfo.value = sensor.toInfo().copy(isAvailable = false)
+            _latestAccuracy.value = null
+            _diagnosticMessage.value = MagneticSensorDiagnostics.SENSOR_START_FAILED_WARNING
+            return
+        }
         activeSensor = sensor
         activeSensorDelay = config.sensorDelay
-        sensorManager.registerListener(this, sensor, config.sensorDelay)
+        _diagnosticMessage.value = null
     }
 
     override fun stop() {

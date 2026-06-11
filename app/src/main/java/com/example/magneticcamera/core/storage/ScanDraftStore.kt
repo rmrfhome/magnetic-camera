@@ -190,8 +190,8 @@ internal object ScanDraftCodec {
 
     private fun JSONObject.toPoint(): NormalizedPoint {
         return NormalizedPoint(
-            x = optDouble("x", 0.0).toFloat().coerceIn(0f, 1f),
-            y = optDouble("y", 0.0).toFloat().coerceIn(0f, 1f)
+            x = optFiniteFloat("x", 0f).coerceIn(0f, 1f),
+            y = optFiniteFloat("y", 0f).coerceIn(0f, 1f)
         )
     }
 
@@ -217,10 +217,10 @@ internal object ScanDraftCodec {
         return GridCellMeasurement(
             id = getString("id"),
             sessionId = getString("sessionId"),
-            row = getInt("row"),
-            col = getInt("col"),
-            sampleCount = getInt("sampleCount"),
-            capturedAtMillis = getLong("capturedAtMillis"),
+            row = getInt("row").coerceAtLeast(0),
+            col = getInt("col").coerceAtLeast(0),
+            sampleCount = getInt("sampleCount").coerceAtLeast(0),
+            capturedAtMillis = getLong("capturedAtMillis").coerceAtLeast(0L),
             xMean = getFiniteFloat("xMean"),
             yMean = getFiniteFloat("yMean"),
             zMean = getFiniteFloat("zMean"),
@@ -228,14 +228,14 @@ internal object ScanDraftCodec {
             magnitudeMedian = optFiniteFloat("magnitudeMedian", magnitudeMean),
             magnitudeMin = optFiniteFloat("magnitudeMin", magnitudeMean),
             magnitudeMax = optFiniteFloat("magnitudeMax", magnitudeMean),
-            magnitudeStdDev = optFiniteFloat("magnitudeStdDev", 0f),
+            magnitudeStdDev = optFiniteFloat("magnitudeStdDev", 0f).coerceAtLeast(0f),
             vectorDeltaMean = vectorDeltaMean,
             vectorDeltaMedian = optFiniteFloat("vectorDeltaMedian", vectorDeltaMean),
             vectorDeltaMin = optFiniteFloat("vectorDeltaMin", vectorDeltaMean),
             vectorDeltaMax = optFiniteFloat("vectorDeltaMax", vectorDeltaMean),
-            vectorDeltaStdDev = getFiniteFloat("vectorDeltaStdDev"),
+            vectorDeltaStdDev = getFiniteFloat("vectorDeltaStdDev").coerceAtLeast(0f),
             magnitudeDeltaMean = optFiniteFloat("magnitudeDeltaMean", 0f),
-            accuracy = getInt("accuracy")
+            accuracy = getInt("accuracy").coerceAtLeast(0)
         )
     }
 

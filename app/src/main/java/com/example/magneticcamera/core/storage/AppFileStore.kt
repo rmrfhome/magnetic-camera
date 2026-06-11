@@ -19,7 +19,7 @@ class AppFileStore(
 
     fun writeText(file: File, text: String) {
         file.parentFile?.mkdirs()
-        file.writeText(text)
+        file.writeText(text, Charsets.UTF_8)
     }
 
     private fun fileIn(directory: String, name: String): File {

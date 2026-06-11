@@ -61,11 +61,13 @@ class PngExporter {
         val right = (width * 0.95f).toInt()
         val barTop = stripTop + (legendHeight * 0.50f).toInt()
         val barBottom = stripTop + (legendHeight * 0.68f).toInt()
-        val segments = 160
+        val segments = legend.gradientColors.size.takeIf { it > 1 } ?: 160
         for (index in 0 until segments) {
             val fraction = index / (segments - 1).toFloat()
-            val gray = (fraction * 255).toInt().coerceIn(0, 255)
-            barPaint.color = Color.rgb(gray, gray, gray)
+            barPaint.color = legend.gradientColors.getOrNull(index) ?: run {
+                val gray = (fraction * 255).toInt().coerceIn(0, 255)
+                Color.rgb(gray, gray, gray)
+            }
             val segmentLeft = left + ((right - left) * index / segments.toFloat()).toInt()
             val segmentRight = left + ((right - left) * (index + 1) / segments.toFloat()).toInt()
             canvas.drawRect(segmentLeft.toFloat(), barTop.toFloat(), segmentRight.toFloat(), barBottom.toFloat(), barPaint)
