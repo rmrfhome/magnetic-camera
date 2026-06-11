@@ -9,9 +9,9 @@ The app is intentionally honest about the physics: a phone has one magnetometer 
 1. Open the app on a Pixel 8 or another Android device with a magnetometer.
 2. Remove magnetic cases, wallet plates, MagSafe-style rings, and metal accessories.
 3. Open `Live Meter` and confirm live X/Y/Z and magnitude values change.
-4. Tap `Set Baseline` away from magnets, speakers, laptop hinges, chargers, and metal tables.
+4. Tap `Set Baseline` away from magnets, speakers, laptop hinges, chargers, metal tables, and magnetic cases.
 5. Start a `New Surface Scan`.
-6. Choose `5x5` or `7x7`, optionally take or import a reference photo, and drag the scan-area corners.
+6. Choose `5x5`, `7x7`, `10x10`, or a custom grid, optionally take or import a reference photo, and drag the scan-area corners.
 7. Capture each highlighted cell while keeping the same phone point, height, and orientation.
 8. Review the heatmap, adjust palette/normalization/opacity, then save PNG, JSON, and CSV.
 9. Reopen saved scans from `Gallery`.

@@ -314,7 +314,7 @@ class ScanWorkflowViewModel(
             }
             _uiState.value = _uiState.value.copy(
                 isCalibrating = true,
-                message = "Hold still for 2 seconds away from magnets, speakers, laptops, chargers, and metal surfaces."
+                message = "Hold still for 2 seconds away from magnets, speakers, laptop hinges, chargers, metal tables, and magnetic cases."
             )
             val samples = collectBaselineSamples()
             val baseline = calibrator.calculate(samples, System.currentTimeMillis())
@@ -491,6 +491,9 @@ class ScanWorkflowViewModel(
                 val (exportHeatmap, overlayBitmap) = withContext(Dispatchers.Default) {
                     val render = buildHeatmap(state, 2048, 2048)
                     render to buildOverlayBitmap(state, render)
+                }
+                if (photoUri != null && overlayBitmap == null) {
+                    error("Could not load the reference photo for overlay export. Reimport the photo or continue without one.")
                 }
                 val session = ScanSession(
                     id = state.currentSessionId,

@@ -108,6 +108,16 @@ fun LiveMeterScreen(
             MagneticGraph(samples = state.recentSamples)
         }
 
+        InstrumentPanel(title = "Baseline") {
+            Text(
+                "Hold still for 2 seconds away from magnets, speakers, laptop hinges, chargers, metal tables, and magnetic cases.",
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            StatusText("Current baseline", state.baseline?.let { "${it.magnitudeMean.format(1)} µT" } ?: "Not set")
+            StatusText("Noise", state.baseline?.let { "${it.magnitudeStdDev.format(2)} µT" } ?: "--")
+            StatusText("Samples", state.baseline?.sampleCount?.toString() ?: "--")
+        }
+
         state.snapshotSample?.let { snapshot ->
             InstrumentPanel(title = "Saved Snapshot") {
                 StatusText("Captured", state.snapshotCreatedAtMillis?.formatTime() ?: "--")
@@ -184,6 +194,7 @@ fun LiveMeterScreen(
                 StatusText("Resolution", "${state.sensorInfo?.resolution?.format(3) ?: "--"} µT")
                 StatusText("Range", "${state.sensorInfo?.maximumRange?.format(1) ?: "--"} µT")
                 StatusText("Minimum delay", "${state.sensorInfo?.minimumDelayMicros ?: 0} us")
+                StatusText("Observed rate", "${state.samplingRateHz.format(1)} Hz")
                 val latestSample = state.latestSample
                 if (latestSample?.biasXMicroTesla != null ||
                     latestSample?.biasYMicroTesla != null ||

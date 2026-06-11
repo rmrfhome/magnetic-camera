@@ -99,7 +99,7 @@ fun SettingsScreen(
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
             Text(
-                "Magnetic cases, metal surfaces, laptop hinges, chargers, speakers, and wallet plates can distort readings.",
+                "Magnetic cases, metal tables, laptop hinges, chargers, speakers, and wallet plates can distort readings.",
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
             Text(

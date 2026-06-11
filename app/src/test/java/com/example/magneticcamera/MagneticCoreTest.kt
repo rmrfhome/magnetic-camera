@@ -403,6 +403,37 @@ class MagneticCoreTest {
     }
 
     @Test
+    fun scanDraftCodecRejectsNonFiniteBaselineValues() {
+        val draftJson = """
+            {
+              "setup": {
+                "name": "Invalid baseline draft",
+                "gridWidth": 5,
+                "gridHeight": 5,
+                "shouldTakePhoto": false,
+                "captureMode": "Manual"
+              },
+              "currentSessionId": "invalid-baseline",
+              "baseline": {
+                "createdAtMillis": 123,
+                "sampleCount": 10,
+                "xMean": 1e999,
+                "yMean": 2.0,
+                "zMean": 3.0,
+                "magnitudeMean": 4.0,
+                "xStdDev": 0.1,
+                "yStdDev": 0.2,
+                "zStdDev": 0.3,
+                "magnitudeStdDev": 0.4
+              },
+              "cells": []
+            }
+        """.trimIndent()
+
+        assertTrue(runCatching { ScanDraftCodec.decode(draftJson) }.isFailure)
+    }
+
+    @Test
     fun scanDraftCodecRestoresLegacyCellsWithoutDerivedStats() {
         val legacyJson = """
             {

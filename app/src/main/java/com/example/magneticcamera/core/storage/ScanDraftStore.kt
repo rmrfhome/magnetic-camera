@@ -166,16 +166,16 @@ internal object ScanDraftCodec {
 
     private fun JSONObject.toBaseline(): MagneticBaseline {
         return MagneticBaseline(
-            createdAtMillis = getLong("createdAtMillis"),
-            sampleCount = getInt("sampleCount"),
-            xMean = getDouble("xMean").toFloat(),
-            yMean = getDouble("yMean").toFloat(),
-            zMean = getDouble("zMean").toFloat(),
-            magnitudeMean = getDouble("magnitudeMean").toFloat(),
-            xStdDev = getDouble("xStdDev").toFloat(),
-            yStdDev = getDouble("yStdDev").toFloat(),
-            zStdDev = getDouble("zStdDev").toFloat(),
-            magnitudeStdDev = getDouble("magnitudeStdDev").toFloat()
+            createdAtMillis = getLong("createdAtMillis").coerceAtLeast(0L),
+            sampleCount = getInt("sampleCount").coerceAtLeast(0),
+            xMean = getFiniteFloat("xMean"),
+            yMean = getFiniteFloat("yMean"),
+            zMean = getFiniteFloat("zMean"),
+            magnitudeMean = getFiniteFloat("magnitudeMean"),
+            xStdDev = getFiniteFloat("xStdDev").coerceAtLeast(0f),
+            yStdDev = getFiniteFloat("yStdDev").coerceAtLeast(0f),
+            zStdDev = getFiniteFloat("zStdDev").coerceAtLeast(0f),
+            magnitudeStdDev = getFiniteFloat("magnitudeStdDev").coerceAtLeast(0f)
         )
     }
 

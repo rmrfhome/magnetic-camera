@@ -190,7 +190,7 @@ fun ScanSetupScreen(
 
         InstrumentPanel(title = "Baseline") {
             Text(
-                "First measure the local background field. Hold the phone still away from magnets, speakers, laptops, chargers, and metal surfaces.",
+                "First measure the local background field. Hold the phone still for 2 seconds away from magnets, speakers, laptop hinges, chargers, metal tables, and magnetic cases.",
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
             Button(

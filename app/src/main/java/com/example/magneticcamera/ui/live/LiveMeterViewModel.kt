@@ -135,7 +135,7 @@ class LiveMeterViewModel(
             }
             _uiState.value = _uiState.value.copy(
                 isCalibrating = true,
-                message = "Hold still away from magnets, speakers, chargers, and metal surfaces."
+                message = "Hold still for 2 seconds away from magnets, speakers, laptop hinges, chargers, metal tables, and magnetic cases."
             )
             val samples = collectBaselineSamples()
             val baseline = calibrator.calculate(samples, System.currentTimeMillis())

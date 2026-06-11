@@ -59,9 +59,13 @@ class FakeMagneticSensorReader(
     override val diagnosticMessage: StateFlow<String?> = _diagnosticMessage
 
     private var job: Job? = null
+    private var activeSamplingMode: SensorSamplingMode? = null
 
     override fun start(config: SensorReadConfig) {
-        if (!available || job?.isActive == true) return
+        if (!available) return
+        if (job?.isActive == true && activeSamplingMode == config.samplingMode) return
+        stop()
+        activeSamplingMode = config.samplingMode
         job = scope.launch {
             var tick = 0
             val delayMillis = when (config.samplingMode) {
@@ -96,6 +100,7 @@ class FakeMagneticSensorReader(
     override fun stop() {
         job?.cancel()
         job = null
+        activeSamplingMode = null
     }
 
     private fun Random.nextFloatCentered(radius: Float): Float {

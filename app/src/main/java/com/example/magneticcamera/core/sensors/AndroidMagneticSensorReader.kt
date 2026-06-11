@@ -33,21 +33,27 @@ class AndroidMagneticSensorReader(
     override val diagnosticMessage: StateFlow<String?> = _diagnosticMessage
 
     private var activeSensor: Sensor? = null
+    private var activeSensorDelay: Int? = null
 
     override fun start(config: SensorReadConfig) {
         val sensor = detectPreferredSensor()
         _sensorInfo.value = sensor?.toInfo() ?: MagneticSensorInfo.Unavailable
-        if (sensor == null) return
+        if (sensor == null) {
+            stop()
+            return
+        }
 
-        if (activeSensor == sensor) return
+        if (activeSensor == sensor && activeSensorDelay == config.sensorDelay) return
         stop()
         activeSensor = sensor
+        activeSensorDelay = config.sensorDelay
         sensorManager.registerListener(this, sensor, config.sensorDelay)
     }
 
     override fun stop() {
         sensorManager.unregisterListener(this)
         activeSensor = null
+        activeSensorDelay = null
     }
 
     override fun onSensorChanged(event: SensorEvent) {
